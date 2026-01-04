@@ -1,0 +1,5 @@
+black==24.8.0
+coverage==7.6.1
+mypy==1.11.1
+pylint==3.2.6
+pyinstaller==6.10.0

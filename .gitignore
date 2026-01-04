@@ -1,0 +1,20 @@
+# Python files
+__pycache__/
+build/
+dist/
+
+# Virtual environment
+.venv/
+
+# mypy
+.mypy_cache/
+
+# Testing and coverage
+htmlcov/
+.coverage
+
+# Vim temp files
+*.swp
+
+# Docker support
+.docker-built
