@@ -92,34 +92,19 @@ def read_markdown_file(filepath: str) -> Tuple[Dict[str, Any], str]:
     return frontmatter, content
 
 
-def process_song(song: str, working_directory: str) -> None:
-    """
-    Process a single song entry.
-
-    Args:
-        song: Dictionary containing song data
-        working_directory: Directory to use for any file operations
-    """
-    logging.debug("Processing song: %s", song)
-
-    # Load markdown file for the song
-    filename = song[2:-2] + ".md"  # Remove [[ and ]] and add .md
-    frontmatter, _ = read_markdown_file(os.path.join(working_directory, filename))
-
-    # Get chordpro filename from frontmatter
-    chordpro_filename = frontmatter.get("chordpro")
-    if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song)
-        sys.exit(1)
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+def render_chordpro_pdf(
+    chordpro_filepath: str,
+    working_directory: str,
+) -> str:
+    """Render a chordpro chart to PDF, skipping if already up to date."""
 
     # Get chordpro filename without extension
-    chordpro_filename_basename, _ = os.path.splitext(chordpro_filename)
+    chordpro_filename_basename, _ = os.path.splitext(chordpro_filepath)
 
     # Look for custom chordpro config file, otherwise use default
-    chordpro_custom_config_filaneme = chordpro_filename_basename + ".json"
+    chordpro_custom_config_filename = chordpro_filename_basename + ".json"
     chordpro_custom_config_filepath = os.path.join(
-        working_directory, chordpro_custom_config_filaneme
+        working_directory, chordpro_custom_config_filename
     )
     if os.path.isfile(chordpro_custom_config_filepath):
         logging.debug(
@@ -142,7 +127,7 @@ def process_song(song: str, working_directory: str) -> None:
     if os.path.isfile(pdf_filepath):
         if os.path.getmtime(pdf_filepath) >= latest_mtime:
             logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
-            return
+            return pdf_filepath
 
     # Create command line to process chordpro file
     args: List[str] = [
@@ -165,6 +150,36 @@ def process_song(song: str, working_directory: str) -> None:
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
     logging.debug("chordpro output: %s", result.stdout)
+
+    return pdf_filepath
+
+
+def process_song(song: str, working_directory: str) -> None:
+    """
+    Process a single song entry.
+
+    Args:
+        song: Dictionary containing song data
+        working_directory: Directory to use for any file operations
+    """
+    logging.debug("Processing song: %s", song)
+
+    # Load markdown file for the song
+    filename = song[2:-2] + ".md"  # Remove [[ and ]] and add .md
+    frontmatter, _ = read_markdown_file(os.path.join(working_directory, filename))
+
+    # Get chordpro filename from frontmatter
+    chordpro_filename = frontmatter.get("chordpro")
+    if not chordpro_filename:
+        logging.error("No chordpro file specified for song: %s", song)
+        sys.exit(1)
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+
+    # Render chord chart to PDF
+    render_chordpro_pdf(
+        chordpro_filepath=chordpro_filepath,
+        working_directory=working_directory,
+    )
 
 
 def main() -> None:  # pragma: no cover
