@@ -111,21 +111,34 @@ def process_song(song: str, working_directory: str) -> None:
     if not chordpro_filename:
         logging.error("No chordpro file specified for song: %s", song)
         sys.exit(1)
-    
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+
     # Get chordpro filename without extension
     chordpro_filename_basename, _ = os.path.splitext(chordpro_filename)
 
+    # Is there already a PDF with this name? If so, does it have a newer timestamp?
+    pdf_filepath = os.path.join(working_directory, chordpro_filename_basename + ".pdf")
+    if os.path.isfile(pdf_filepath):
+        if os.path.getmtime(pdf_filepath) >= os.path.getmtime(chordpro_filepath):
+            logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
+            return
+
     chordpro_custom_config_filaneme = chordpro_filename_basename + ".json"
-    chordpro_custom_config_filepath = os.path.join(working_directory, chordpro_custom_config_filaneme)
+    chordpro_custom_config_filepath = os.path.join(
+        working_directory, chordpro_custom_config_filaneme
+    )
     if os.path.isfile(chordpro_custom_config_filepath):
-        logging.debug("Using custom chordpro config file: %s", chordpro_custom_config_filepath)
+        logging.debug(
+            "Using custom chordpro config file: %s", chordpro_custom_config_filepath
+        )
         config_filename = chordpro_custom_config_filepath
     else:
         logging.debug("Using default chordpro config file")
-        config_filename = os.path.join(working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME)
+        config_filename = os.path.join(
+            working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
+        )
 
     # Create command line to process chordpro file
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
     args: List[str] = [
         "chordpro",
         "--config",
@@ -133,7 +146,7 @@ def process_song(song: str, working_directory: str) -> None:
         "--page-size",
         "letter",
         "--output",
-        os.path.join(working_directory, chordpro_filename_basename + ".pdf"),
+        pdf_filepath,
         chordpro_filepath,
     ]
 
