@@ -99,10 +99,10 @@ def render_chordpro_pdf(
     """Render a chordpro chart to PDF, skipping if already up to date."""
 
     # Get chordpro filename without extension
-    chordpro_filename_basename, _ = os.path.splitext(chordpro_filepath)
+    chordpro_filename_without_ext, _ = os.path.splitext(chordpro_filepath)
 
     # Look for custom chordpro config file, otherwise use default
-    chordpro_custom_config_filename = chordpro_filename_basename + ".json"
+    chordpro_custom_config_filename = chordpro_filename_without_ext + ".json"
     chordpro_custom_config_filepath = os.path.join(
         working_directory, chordpro_custom_config_filename
     )
@@ -123,14 +123,14 @@ def render_chordpro_pdf(
     latest_mtime = max(chordpro_mtime, config_mtime)
 
     # Is there already a PDF for this chart? If so, does it have a newer timestamp?
-    pdf_filepath = os.path.join(working_directory, chordpro_filename_basename + ".pdf")
+    pdf_filepath = os.path.join(working_directory, chordpro_filename_without_ext + ".pdf")
     if os.path.isfile(pdf_filepath):
         if os.path.getmtime(pdf_filepath) >= latest_mtime:
             logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
             return pdf_filepath
 
     # Create command line to process chordpro file
-    args: List[str] = [
+    chordpro_args: List[str] = [
         "chordpro",
         "--config",
         config_filepath,
@@ -142,8 +142,8 @@ def render_chordpro_pdf(
     ]
 
     # Invoke chordpro program
-    logging.debug("Running chordpro: %s", " ".join(args))
-    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    logging.debug("Running chordpro: %s", " ".join(chordpro_args))
+    result = subprocess.run(chordpro_args, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         logging.error("chordpro failed with return code %d", result.returncode)
         logging.error("stdout: %s", result.stdout)
@@ -154,7 +154,7 @@ def render_chordpro_pdf(
     return pdf_filepath
 
 
-def process_song(song: str, working_directory: str) -> None:
+def process_song(song: str, working_directory: str) -> str:
     """
     Process a single song entry.
 
@@ -176,10 +176,13 @@ def process_song(song: str, working_directory: str) -> None:
     chordpro_filepath = os.path.join(working_directory, chordpro_filename)
 
     # Render chord chart to PDF
-    render_chordpro_pdf(
+    pdf_filepath = render_chordpro_pdf(
         chordpro_filepath=chordpro_filepath,
         working_directory=working_directory,
     )
+
+    # Return PDF filename.
+    return pdf_filepath
 
 
 def main() -> None:  # pragma: no cover
@@ -193,6 +196,7 @@ def main() -> None:  # pragma: no cover
         logging.error("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
         sys.exit(1)
     logging.debug("Source file: %s", source_file)
+    source_file_without_ext, _ = os.path.splitext(source_file)
 
     # Infer working directory from source file
     working_directory = os.path.dirname(source_file)
@@ -207,8 +211,24 @@ def main() -> None:  # pragma: no cover
 
     # Iterate through songs
     songs = frontmatter.get("songs", [])
+    pdf_filenames: List[str] = []
     for song in songs:
-        process_song(song, working_directory)
+        pdf_filepath = process_song(song, working_directory)
+        pdf_filenames.append(pdf_filepath)
+    logging.debug("Generated PDF files: %s", pdf_filenames)
+
+    # Combine using pdfunite
+    pdfunite_args: List[str] = ["pdfunite"]
+    pdfunite_args.extend(pdf_filenames)
+    pdfunite_args.append(source_file_without_ext + "-worship-music.pdf")
+    logging.debug("Running pdfunite: %s", " ".join(pdfunite_args))
+    result = subprocess.run(pdfunite_args, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        logging.error("pdfunite failed with return code %d", result.returncode)
+        logging.error("stdout: %s", result.stdout)
+        logging.error("stderr: %s", result.stderr)
+        sys.exit(1)
+    logging.debug("pdfunite output: %s", result.stdout)
 
 
 if __name__ == "__main__":  # pragma: no cover
