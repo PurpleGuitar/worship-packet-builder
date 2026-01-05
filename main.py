@@ -4,13 +4,17 @@
 from argparse import ArgumentParser, Namespace
 import logging
 import os
+import subprocess
 import sys
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 # Library imports
 import yaml
 
 # Project imports
+
+# Constants
+CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
 
 
 def parse_args() -> Namespace:  # pragma: no cover
@@ -88,6 +92,62 @@ def read_markdown_file(filepath: str) -> Tuple[Dict[str, Any], str]:
     return frontmatter, content
 
 
+def process_song(song: str, working_directory: str) -> None:
+    """
+    Process a single song entry.
+
+    Args:
+        song: Dictionary containing song data
+        working_directory: Directory to use for any file operations
+    """
+    logging.debug("Processing song: %s", song)
+
+    # Load markdown file for the song
+    filename = song[2:-2] + ".md"  # Remove [[ and ]] and add .md
+    frontmatter, _ = read_markdown_file(os.path.join(working_directory, filename))
+
+    # Get chordpro filename from frontmatter
+    chordpro_filename = frontmatter.get("chordpro")
+    if not chordpro_filename:
+        logging.error("No chordpro file specified for song: %s", song)
+        sys.exit(1)
+    
+    # Get chordpro filename without extension
+    chordpro_filename_basename, _ = os.path.splitext(chordpro_filename)
+
+    chordpro_custom_config_filaneme = chordpro_filename_basename + ".json"
+    chordpro_custom_config_filepath = os.path.join(working_directory, chordpro_custom_config_filaneme)
+    if os.path.isfile(chordpro_custom_config_filepath):
+        logging.debug("Using custom chordpro config file: %s", chordpro_custom_config_filepath)
+        config_filename = chordpro_custom_config_filepath
+    else:
+        logging.debug("Using default chordpro config file")
+        config_filename = os.path.join(working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME)
+
+    # Create command line to process chordpro file
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    args: List[str] = [
+        "chordpro",
+        "--config",
+        config_filename,
+        "--page-size",
+        "letter",
+        "--output",
+        os.path.join(working_directory, chordpro_filename_basename + ".pdf"),
+        chordpro_filepath,
+    ]
+
+    # Invoke chordpro program
+    logging.debug("Running chordpro: %s", " ".join(args))
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        logging.error("chordpro failed with return code %d", result.returncode)
+        logging.error("stdout: %s", result.stdout)
+        logging.error("stderr: %s", result.stderr)
+        sys.exit(1)
+    logging.debug("chordpro output: %s", result.stdout)
+
+
 def main() -> None:  # pragma: no cover
     """Main function"""
     args = parse_args()
@@ -98,20 +158,23 @@ def main() -> None:  # pragma: no cover
     if not source_file:
         logging.error("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
         sys.exit(1)
-    logging.info("Source file: %s", source_file)
+    logging.debug("Source file: %s", source_file)
 
     # Infer working directory from source file
     working_directory = os.path.dirname(source_file)
-    logging.info("Working directory: %s", working_directory)
+    logging.debug("Working directory: %s", working_directory)
 
     # Read and parse markdown file
     try:
-        frontmatter, content = read_markdown_file(source_file)
-        logging.debug("Frontmatter: %s", frontmatter)
-        logging.debug("Content: %s", content)
+        frontmatter, _ = read_markdown_file(source_file)
     except (FileNotFoundError, ValueError) as e:
         logging.error("Error reading source file: %s", e)
         sys.exit(1)
+
+    # Iterate through songs
+    songs = frontmatter.get("songs", [])
+    for song in songs:
+        process_song(song, working_directory)
 
 
 if __name__ == "__main__":  # pragma: no cover
