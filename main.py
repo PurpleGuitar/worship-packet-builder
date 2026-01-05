@@ -116,13 +116,7 @@ def process_song(song: str, working_directory: str) -> None:
     # Get chordpro filename without extension
     chordpro_filename_basename, _ = os.path.splitext(chordpro_filename)
 
-    # Is there already a PDF with this name? If so, does it have a newer timestamp?
-    pdf_filepath = os.path.join(working_directory, chordpro_filename_basename + ".pdf")
-    if os.path.isfile(pdf_filepath):
-        if os.path.getmtime(pdf_filepath) >= os.path.getmtime(chordpro_filepath):
-            logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
-            return
-
+    # Look for custom chordpro config file, otherwise use default
     chordpro_custom_config_filaneme = chordpro_filename_basename + ".json"
     chordpro_custom_config_filepath = os.path.join(
         working_directory, chordpro_custom_config_filaneme
@@ -131,18 +125,30 @@ def process_song(song: str, working_directory: str) -> None:
         logging.debug(
             "Using custom chordpro config file: %s", chordpro_custom_config_filepath
         )
-        config_filename = chordpro_custom_config_filepath
+        config_filepath = chordpro_custom_config_filepath
     else:
         logging.debug("Using default chordpro config file")
-        config_filename = os.path.join(
+        config_filepath = os.path.join(
             working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
         )
+
+    # Get the latest modification time of the chordpro file and config file
+    chordpro_mtime = os.path.getmtime(chordpro_filepath)
+    config_mtime = os.path.getmtime(config_filepath)
+    latest_mtime = max(chordpro_mtime, config_mtime)
+
+    # Is there already a PDF for this chart? If so, does it have a newer timestamp?
+    pdf_filepath = os.path.join(working_directory, chordpro_filename_basename + ".pdf")
+    if os.path.isfile(pdf_filepath):
+        if os.path.getmtime(pdf_filepath) >= latest_mtime:
+            logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
+            return
 
     # Create command line to process chordpro file
     args: List[str] = [
         "chordpro",
         "--config",
-        config_filename,
+        config_filepath,
         "--page-size",
         "letter",
         "--output",
