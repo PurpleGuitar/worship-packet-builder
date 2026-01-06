@@ -2,11 +2,12 @@
 
 # Standard imports
 from argparse import ArgumentParser, Namespace
+from typing import Any, Dict, List
 import logging
 import os
+import re
 import subprocess
 import sys
-from typing import Any, Dict, List
 
 # Library imports
 import yaml
@@ -76,20 +77,22 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
     return frontmatter
 
 
-def get_chordpro_filename_from_song_name(song_name: str, working_directory: str) -> str:
+def get_chordpro_filename_from_song_name(
+    song_filename: str, working_directory: str
+) -> str:
     """
     Get the chordpro filename for a given song entry.
     """
-    logging.debug("Getting chordpro filename for song: %s", song_name)
 
     # Load markdown file for the song
-    filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
-    frontmatter = read_markdown_frontmatter(os.path.join(working_directory, filename))
+    frontmatter = read_markdown_frontmatter(
+        os.path.join(working_directory, song_filename)
+    )
 
     # Get chordpro filename from frontmatter
     chordpro_filename = str(frontmatter.get("chordpro"))
     if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song_name)
+        logging.error("No chordpro file specified for song: %s", song_filename)
         sys.exit(1)
 
     # Ensure file exists
@@ -175,6 +178,88 @@ def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> st
     return pdf_filepath
 
 
+def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
+    """Extract lyrics from a ChordPro file, removing chord annotations."""
+    lyrics_lines: List[str] = []
+    last_line = ""
+    try:
+        with open(chordpro_filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                # Special: if it's a title directive, write header and continue
+                if line.startswith("{title:"):
+                    title = line[len("{title:") :].strip().rstrip("}")
+                    title_line = f"# {title}"
+                    lyrics_lines.append(title_line)
+                    lyrics_lines.append("")  # Blank line after title
+                    last_line = ""
+                    continue
+                # Strip directives enclosed in {}
+                line = re.sub(r"\{.*?\}", "", line)
+                # Remove chord annotations enclosed in []
+                line = re.sub(r"\[.*?\]", "", line)
+                # Collapse multiple spaces into a single space
+                line = re.sub(r"\s+", " ", line)
+                # Remove hyphenations " - "
+                line = line.replace(" - ", "")
+                # Strip leading/trailing whitespace
+                line = line.strip()
+                # If this line is blank and the last line was blank, skip it
+                if not line and not last_line:
+                    continue
+                last_line = line
+                lyrics_lines.append(line)
+    except Exception as e:
+        logging.error("Failed to extract lyrics from %s: %s", chordpro_filepath, e)
+        raise
+    lyrics_text = "\n".join(lyrics_lines)
+    logging.debug("Lyrics text:\n%s", lyrics_text)
+    return lyrics_text
+
+
+def convert_lyrics_to_markdown(lyrics_text: str) -> str:
+    """Convert plain lyrics text to Markdown format."""
+    markdown_lines: List[str] = []
+    slide_lyrics_counter = 0
+    for line in lyrics_text.splitlines():
+        # Blank line
+        if line.strip() == "":
+            if slide_lyrics_counter > 0:
+                # There are lyrics on current slide -- add a slide break
+                markdown_lines.append("\n---\n")  
+                slide_lyrics_counter = 0
+        # Lyric, but there are already at least 2 lyrics on this slide
+        elif slide_lyrics_counter >= 2:
+            markdown_lines.append("\n---\n")
+            markdown_lines.append(line)
+            slide_lyrics_counter = 1
+        # Normal lyric line
+        else:
+            markdown_lines.append(line)
+            slide_lyrics_counter += 1
+    markdown_text = "\n".join(markdown_lines)
+    logging.debug("Markdown text:\n%s", markdown_text)
+    return markdown_text
+
+
+def render_lyrics_to_markdown_file(
+    song_filename: str, chordpro_filename: str, working_directory: str
+) -> str:
+    """
+    Render lyrics from a ChordPro file to a Markdown file.
+    """
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
+    lyrics_markdown = convert_lyrics_to_markdown(lyrics_text)
+    lyrics_md_filepath = os.path.join(
+        working_directory,
+        os.path.splitext(song_filename)[0] + "-lyrics.md",
+    )
+    with open(lyrics_md_filepath, "w", encoding="utf-8") as f:
+        f.write(lyrics_markdown)
+    logging.debug("Wrote lyrics markdown file: %s", lyrics_md_filepath)
+    return lyrics_md_filepath
+
+
 def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> None:
     """Invoke pdfunite to combine PDF files"""
     pdfunite_args: List[str] = ["pdfunite"]
@@ -214,19 +299,27 @@ def main() -> None:  # pragma: no cover
         logging.error("Error reading source file: %s", e)
         sys.exit(1)
 
-    # Render ChordPro files to PDFs
+    # Process each song in the list
     songs = frontmatter.get("songs", [])
     pdf_filepaths: List[str] = []
-    for song in songs:
+    lyric_filepaths: List[str] = []
+    for song_name in songs:
+        # Get song filename
+        song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
         # Get ChordPro filename for song
         chordpro_filename = get_chordpro_filename_from_song_name(
-            song, working_directory
+            song_filename, working_directory
         )
+        # Render PDFs
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
         pdf_filepaths.append(pdf_filepath)
-    logging.debug("Generated PDF files: %s", pdf_filepaths)
+        # Render lyric files
+        lyrics_md_filepath = render_lyrics_to_markdown_file(
+            song_filename, chordpro_filename, working_directory
+        )
+        lyric_filepaths.append(lyrics_md_filepath)
 
-    # Combine PDFs into final packet
+    # Combine song PDFs into final packet
     call_pdfunite(pdf_filepaths, source_file_without_ext)
 
 
