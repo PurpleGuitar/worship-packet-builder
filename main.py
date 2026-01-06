@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 # Library imports
 import yaml
@@ -47,21 +47,9 @@ def setup_logging(trace: bool) -> None:  # pragma: no cover
     )
 
 
-def read_markdown_file(filepath: str) -> Tuple[Dict[str, Any], str]:
+def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
     """
     Read a Markdown file and extract YAML frontmatter and content.
-
-    Args:
-        filepath: Path to the Markdown file
-
-    Returns:
-        A tuple containing:
-            - dict: Parsed YAML frontmatter data
-            - str: Non-frontmatter text contents of the file
-
-    Raises:
-        FileNotFoundError: If the file cannot be read
-        ValueError: If the file does not have valid YAML frontmatter
     """
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -82,14 +70,10 @@ def read_markdown_file(filepath: str) -> Tuple[Dict[str, Any], str]:
         raise ValueError("No closing '---' found for frontmatter")
 
     frontmatter_txt = source_content[3:end_frontmatter].strip()
-    frontmatter = yaml.safe_load(frontmatter_txt)
+    frontmatter: Dict[str, Any] = yaml.safe_load(frontmatter_txt)
     logging.debug("Parsed frontmatter: %s", frontmatter)
 
-    # Extract content after frontmatter
-    content = source_content[end_frontmatter + 3 :].strip()
-    logging.debug("Extracted content: %s", content)
-
-    return frontmatter, content
+    return frontmatter
 
 
 def call_chordpro(
@@ -133,6 +117,26 @@ def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> Non
         sys.exit(1)
     logging.debug("pdfunite output: %s", result.stdout)
 
+
+def get_chordpro_filename_from_song_name(song_name: str, working_directory: str) -> str:
+    """
+    Get the chordpro filename for a given song entry.
+    """
+    logging.debug("Getting chordpro filename for song: %s", song_name)
+
+    # Load markdown file for the song
+    filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
+    frontmatter = read_markdown_frontmatter(os.path.join(working_directory, filename))
+
+    # Get chordpro filename from frontmatter
+    chordpro_filename = frontmatter.get("chordpro")
+    if not chordpro_filename:
+        logging.error("No chordpro file specified for song: %s", song_name)
+        sys.exit(1)
+
+    return chordpro_filename
+
+
 def render_song_to_pdf(song: str, working_directory: str) -> str:
     """
     Process a single song entry.
@@ -143,15 +147,8 @@ def render_song_to_pdf(song: str, working_directory: str) -> str:
     """
     logging.debug("Processing song: %s", song)
 
-    # Load markdown file for the song
-    filename = song[2:-2] + ".md"  # Remove [[ and ]] and add .md
-    frontmatter, _ = read_markdown_file(os.path.join(working_directory, filename))
-
-    # Get chordpro filename from frontmatter
-    chordpro_filename = frontmatter.get("chordpro")
-    if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song)
-        sys.exit(1)
+    # Get chordpro filename
+    chordpro_filename = get_chordpro_filename_from_song_name(song, working_directory)
     chordpro_filepath = os.path.join(working_directory, chordpro_filename)
 
     # Get chordpro filename without extension
@@ -213,7 +210,7 @@ def main() -> None:  # pragma: no cover
 
     # Read and parse markdown file
     try:
-        frontmatter, _ = read_markdown_file(source_file)
+        frontmatter = read_markdown_frontmatter(source_file)
     except (FileNotFoundError, ValueError) as e:
         logging.error("Error reading source file: %s", e)
         sys.exit(1)
