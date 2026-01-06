@@ -379,25 +379,32 @@ def main() -> None:  # pragma: no cover
     lyrics_filepaths: List[str] = []
     slides_filepaths: List[str] = []
     for song_name in songs:
+
         # Get song filename
         song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
+
         # Get ChordPro filename for song
         chordpro_filename = get_chordpro_filename_from_song_name(
             song_filename, working_directory
         )
-        # Render PDFs
+
+        # Render ChordPro to PDF
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
         chords_pdf_filepaths.append(pdf_filepath)
-        # Render lyric files
+
+        # Render lyrics to markdown text file
         lyrics_md_filepath = render_lyrics_to_markdown_text_file(
             song_filename, chordpro_filename, working_directory
         )
         lyrics_filepaths.append(lyrics_md_filepath)
-        # Render slides files
+
+        # Render lyrics to slides markdown file
         slides_md_filepath = render_lyrics_to_markdown_slides_file(
             song_filename, chordpro_filename, working_directory
         )
         slides_filepaths.append(slides_md_filepath)
+
+        # Convert slides markdown to PPTX
         call_pandoc_slides(slides_md_filepath)
 
     # Combine chord PDFs into final packet
