@@ -212,50 +212,70 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
         logging.error("Failed to extract lyrics from %s: %s", chordpro_filepath, e)
         raise
     lyrics_text = "\n".join(lyrics_lines)
-    logging.debug("Lyrics text:\n%s", lyrics_text)
     return lyrics_text
 
 
 def convert_lyrics_to_slides(lyrics_text: str) -> str:
     """Convert plain lyrics text to Markdown format."""
     markdown_lines: List[str] = []
-    slide_lyrics_counter = 0
+    slide_lines: List[str] = []
+    section_lines: List[str] = []
     for line in lyrics_text.splitlines():
 
         # Blank line
         if line.strip() == "":
-            if slide_lyrics_counter > 0:
+            if slide_lines:
                 # There are lyrics on current slide -- add a slide break
-                markdown_lines.append("\n---\n")  
-                slide_lyrics_counter = 0
+                markdown_lines.append("\n---\n")
+                slide_lines = []
+                section_lines = []
             # Either way, skip blank line
             continue
 
         # CCLI footer -- don't line break
         if "ccli" in line.lower() or "©" in line:
-            markdown_lines.append(line)
-            slide_lyrics_counter += 1
+            markdown_lines.append(line + "  ")
+            slide_lines.append(line)
+            section_lines.append(line)
+            continue
+
+        # Repeat directives: If the line reads something like "(PLAY 2 TIMES)"
+        # which means we should repeat the previous section twice.
+        repeat_match = re.match(r"\(PLAY (\d+) TIMES\)", line.strip().upper())
+        if repeat_match:
+            repeat_count = int(repeat_match.group(1))
+            for _ in range(repeat_count - 1):
+                markdown_lines.append("\n---\n")
+                markdown_lines.extend(section_lines)
             continue
 
         # HACKY HACK HACK
         if line == "There's no god like Jehovah":
-            markdown_lines.append(line)
-            slide_lyrics_counter += 1
+            markdown_lines.append(line + "  ")
+            slide_lines.append(line + "  ")
+            section_lines.append(line + "  ")
             continue
 
+        # If line contains a semicolon, split into two lines
+        if ";" in line:
+            parts = line.split(";")
+            line = "  \n".join(part.strip() for part in parts)
+
         # Regular lyric, but there are already at least 2 lyrics on this slide
-        if slide_lyrics_counter >= 2:
+        if len(slide_lines) >= 2:
             markdown_lines.append("\n---\n")
-            markdown_lines.append(line)
-            slide_lyrics_counter = 1
+            markdown_lines.append(line + "  ")
+            slide_lines = [line + "  "]
+            section_lines.append("\n---\n")
+            section_lines.append(line + "  ")
             continue
 
         # Normal lyric line
-        markdown_lines.append(line)
-        slide_lyrics_counter += 1
+        markdown_lines.append(line + "  ")
+        slide_lines.append(line + "  ")
+        section_lines.append(line + "  ")
 
     markdown_text = "\n".join(markdown_lines)
-    logging.debug("Markdown text:\n%s", markdown_text)
     return markdown_text
 
 
@@ -311,6 +331,24 @@ def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> Non
     logging.debug("pdfunite output: %s", result.stdout)
 
 
+def call_pandoc_slides(final_slides_md_filepath: str) -> None:
+    """Invoke pandoc to convert markdown slides to PDF"""
+    pandoc_args: List[str] = [
+        "pandoc",
+        final_slides_md_filepath,
+        "-o",
+        final_slides_md_filepath.replace(".md", ".pptx"),
+    ]
+    logging.debug("Running pandoc: %s", " ".join(pandoc_args))
+    result = subprocess.run(pandoc_args, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        logging.error("pandoc failed with return code %d", result.returncode)
+        logging.error("stdout: %s", result.stdout)
+        logging.error("stderr: %s", result.stderr)
+        sys.exit(1)
+    logging.debug("pandoc output: %s", result.stdout)
+
+
 def main() -> None:  # pragma: no cover
     """Main function"""
     args = parse_args()
@@ -337,7 +375,7 @@ def main() -> None:  # pragma: no cover
 
     # Process each song in the list
     songs = frontmatter.get("songs", [])
-    pdf_filepaths: List[str] = []
+    chords_pdf_filepaths: List[str] = []
     lyrics_filepaths: List[str] = []
     slides_filepaths: List[str] = []
     for song_name in songs:
@@ -349,7 +387,7 @@ def main() -> None:  # pragma: no cover
         )
         # Render PDFs
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
-        pdf_filepaths.append(pdf_filepath)
+        chords_pdf_filepaths.append(pdf_filepath)
         # Render lyric files
         lyrics_md_filepath = render_lyrics_to_markdown_text_file(
             song_filename, chordpro_filename, working_directory
@@ -360,9 +398,27 @@ def main() -> None:  # pragma: no cover
             song_filename, chordpro_filename, working_directory
         )
         slides_filepaths.append(slides_md_filepath)
+        call_pandoc_slides(slides_md_filepath)
 
-    # Combine song PDFs into final packet
-    call_pdfunite(pdf_filepaths, source_file_without_ext)
+    # Combine chord PDFs into final packet
+    call_pdfunite(chords_pdf_filepaths, source_file_without_ext)
+
+    # Combine lyrics markdown files into final lyrics file
+    final_lyrics_md_filepath = source_file_without_ext + "-lyrics.md"
+    with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
+        for lyrics_md_filepath in lyrics_filepaths:
+            with open(lyrics_md_filepath, "r", encoding="utf-8") as lf:
+                f.write(lf.read())
+                f.write("\n\n")
+
+    # Combine slides markdown files into final slides file
+    final_slides_md_filepath = source_file_without_ext + "-slides.md"
+    with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
+        for slides_md_filepath in slides_filepaths:
+            with open(slides_md_filepath, "r", encoding="utf-8") as sf:
+                f.write(sf.read())
+                f.write("\n\n---\n\n")  # Slide break between songs
+    call_pandoc_slides(final_slides_md_filepath)
 
 
 if __name__ == "__main__":  # pragma: no cover
