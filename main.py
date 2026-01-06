@@ -76,6 +76,31 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
     return frontmatter
 
 
+def get_chordpro_filename_from_song_name(song_name: str, working_directory: str) -> str:
+    """
+    Get the chordpro filename for a given song entry.
+    """
+    logging.debug("Getting chordpro filename for song: %s", song_name)
+
+    # Load markdown file for the song
+    filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
+    frontmatter = read_markdown_frontmatter(os.path.join(working_directory, filename))
+
+    # Get chordpro filename from frontmatter
+    chordpro_filename = str(frontmatter.get("chordpro"))
+    if not chordpro_filename:
+        logging.error("No chordpro file specified for song: %s", song_name)
+        sys.exit(1)
+
+    # Ensure file exists
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    if not os.path.isfile(chordpro_filepath):
+        logging.error("Chordpro file does not exist: %s", chordpro_filepath)
+        sys.exit(1)
+
+    return chordpro_filename
+
+
 def call_chordpro(
     config_filepath: str, pdf_filepath: str, chordpro_filepath: str
 ) -> None:
@@ -101,46 +126,6 @@ def call_chordpro(
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
     logging.debug("chordpro output: %s", result.stdout)
-
-
-def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> None:
-    """Invoke pdfunite to combine PDF files"""
-    pdfunite_args: List[str] = ["pdfunite"]
-    pdfunite_args.extend(pdf_filenames)
-    pdfunite_args.append(source_file_without_ext + "-worship-music.pdf")
-    logging.debug("Running pdfunite: %s", " ".join(pdfunite_args))
-    result = subprocess.run(pdfunite_args, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        logging.error("pdfunite failed with return code %d", result.returncode)
-        logging.error("stdout: %s", result.stdout)
-        logging.error("stderr: %s", result.stderr)
-        sys.exit(1)
-    logging.debug("pdfunite output: %s", result.stdout)
-
-
-def get_chordpro_filename_from_song_name(song_name: str, working_directory: str) -> str:
-    """
-    Get the chordpro filename for a given song entry.
-    """
-    logging.debug("Getting chordpro filename for song: %s", song_name)
-
-    # Load markdown file for the song
-    filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
-    frontmatter = read_markdown_frontmatter(os.path.join(working_directory, filename))
-
-    # Get chordpro filename from frontmatter
-    chordpro_filename = str(frontmatter.get("chordpro"))
-    if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song_name)
-        sys.exit(1)
-
-    # Ensure file exists
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
-    if not os.path.isfile(chordpro_filepath):
-        logging.error("Chordpro file does not exist: %s", chordpro_filepath)
-        sys.exit(1)
-
-    return chordpro_filename
 
 
 def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> str:
@@ -190,6 +175,21 @@ def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> st
     return pdf_filepath
 
 
+def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> None:
+    """Invoke pdfunite to combine PDF files"""
+    pdfunite_args: List[str] = ["pdfunite"]
+    pdfunite_args.extend(pdf_filenames)
+    pdfunite_args.append(source_file_without_ext + "-worship-music.pdf")
+    logging.debug("Running pdfunite: %s", " ".join(pdfunite_args))
+    result = subprocess.run(pdfunite_args, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        logging.error("pdfunite failed with return code %d", result.returncode)
+        logging.error("stdout: %s", result.stdout)
+        logging.error("stderr: %s", result.stderr)
+        sys.exit(1)
+    logging.debug("pdfunite output: %s", result.stdout)
+
+
 def main() -> None:  # pragma: no cover
     """Main function"""
     args = parse_args()
@@ -219,7 +219,9 @@ def main() -> None:  # pragma: no cover
     pdf_filepaths: List[str] = []
     for song in songs:
         # Get ChordPro filename for song
-        chordpro_filename = get_chordpro_filename_from_song_name(song, working_directory)
+        chordpro_filename = get_chordpro_filename_from_song_name(
+            song, working_directory
+        )
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
         pdf_filepaths.append(pdf_filepath)
     logging.debug("Generated PDF files: %s", pdf_filepaths)
