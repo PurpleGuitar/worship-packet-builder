@@ -129,26 +129,25 @@ def get_chordpro_filename_from_song_name(song_name: str, working_directory: str)
     frontmatter = read_markdown_frontmatter(os.path.join(working_directory, filename))
 
     # Get chordpro filename from frontmatter
-    chordpro_filename = frontmatter.get("chordpro")
+    chordpro_filename = str(frontmatter.get("chordpro"))
     if not chordpro_filename:
         logging.error("No chordpro file specified for song: %s", song_name)
+        sys.exit(1)
+
+    # Ensure file exists
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    if not os.path.isfile(chordpro_filepath):
+        logging.error("Chordpro file does not exist: %s", chordpro_filepath)
         sys.exit(1)
 
     return chordpro_filename
 
 
-def render_song_to_pdf(song: str, working_directory: str) -> str:
+def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> str:
     """
     Process a single song entry.
-
-    Args:
-        song: Dictionary containing song data
-        working_directory: Directory to use for any file operations
     """
-    logging.debug("Processing song: %s", song)
 
-    # Get chordpro filename
-    chordpro_filename = get_chordpro_filename_from_song_name(song, working_directory)
     chordpro_filepath = os.path.join(working_directory, chordpro_filename)
 
     # Get chordpro filename without extension
@@ -215,16 +214,18 @@ def main() -> None:  # pragma: no cover
         logging.error("Error reading source file: %s", e)
         sys.exit(1)
 
-    # Iterate through songs
+    # Render ChordPro files to PDFs
     songs = frontmatter.get("songs", [])
-    pdf_filenames: List[str] = []
+    pdf_filepaths: List[str] = []
     for song in songs:
-        pdf_filepath = render_song_to_pdf(song, working_directory)
-        pdf_filenames.append(pdf_filepath)
-    logging.debug("Generated PDF files: %s", pdf_filenames)
+        # Get ChordPro filename for song
+        chordpro_filename = get_chordpro_filename_from_song_name(song, working_directory)
+        pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
+        pdf_filepaths.append(pdf_filepath)
+    logging.debug("Generated PDF files: %s", pdf_filepaths)
 
     # Combine PDFs into final packet
-    call_pdfunite(pdf_filenames, source_file_without_ext)
+    call_pdfunite(pdf_filepaths, source_file_without_ext)
 
 
 if __name__ == "__main__":  # pragma: no cover
