@@ -216,32 +216,50 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
     return lyrics_text
 
 
-def convert_lyrics_to_markdown(lyrics_text: str) -> str:
+def convert_lyrics_to_slides(lyrics_text: str) -> str:
     """Convert plain lyrics text to Markdown format."""
     markdown_lines: List[str] = []
     slide_lyrics_counter = 0
     for line in lyrics_text.splitlines():
+
         # Blank line
         if line.strip() == "":
             if slide_lyrics_counter > 0:
                 # There are lyrics on current slide -- add a slide break
                 markdown_lines.append("\n---\n")  
                 slide_lyrics_counter = 0
-        # Lyric, but there are already at least 2 lyrics on this slide
-        elif slide_lyrics_counter >= 2:
+            # Either way, skip blank line
+            continue
+
+        # CCLI footer -- don't line break
+        if "ccli" in line.lower() or "©" in line:
+            markdown_lines.append(line)
+            slide_lyrics_counter += 1
+            continue
+
+        # HACKY HACK HACK
+        if line == "There's no god like Jehovah":
+            markdown_lines.append(line)
+            slide_lyrics_counter += 1
+            continue
+
+        # Regular lyric, but there are already at least 2 lyrics on this slide
+        if slide_lyrics_counter >= 2:
             markdown_lines.append("\n---\n")
             markdown_lines.append(line)
             slide_lyrics_counter = 1
+            continue
+
         # Normal lyric line
-        else:
-            markdown_lines.append(line)
-            slide_lyrics_counter += 1
+        markdown_lines.append(line)
+        slide_lyrics_counter += 1
+
     markdown_text = "\n".join(markdown_lines)
     logging.debug("Markdown text:\n%s", markdown_text)
     return markdown_text
 
 
-def render_lyrics_to_markdown_file(
+def render_lyrics_to_markdown_text_file(
     song_filename: str, chordpro_filename: str, working_directory: str
 ) -> str:
     """
@@ -249,15 +267,33 @@ def render_lyrics_to_markdown_file(
     """
     chordpro_filepath = os.path.join(working_directory, chordpro_filename)
     lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
-    lyrics_markdown = convert_lyrics_to_markdown(lyrics_text)
     lyrics_md_filepath = os.path.join(
         working_directory,
         os.path.splitext(song_filename)[0] + "-lyrics.md",
     )
     with open(lyrics_md_filepath, "w", encoding="utf-8") as f:
-        f.write(lyrics_markdown)
-    logging.debug("Wrote lyrics markdown file: %s", lyrics_md_filepath)
+        f.write(lyrics_text)
+    logging.debug("Wrote lyrics to Markdown text file: %s", lyrics_md_filepath)
     return lyrics_md_filepath
+
+
+def render_lyrics_to_markdown_slides_file(
+    song_filename: str, chordpro_filename: str, working_directory: str
+) -> str:
+    """
+    Render lyrics from a ChordPro file to a Markdown slides file.
+    """
+    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
+    slides_markdown = convert_lyrics_to_slides(lyrics_text)
+    slides_md_filepath = os.path.join(
+        working_directory,
+        os.path.splitext(song_filename)[0] + "-slides.md",
+    )
+    with open(slides_md_filepath, "w", encoding="utf-8") as f:
+        f.write(slides_markdown)
+    logging.debug("Wrote slides markdown file: %s", slides_md_filepath)
+    return slides_md_filepath
 
 
 def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> None:
@@ -302,7 +338,8 @@ def main() -> None:  # pragma: no cover
     # Process each song in the list
     songs = frontmatter.get("songs", [])
     pdf_filepaths: List[str] = []
-    lyric_filepaths: List[str] = []
+    lyrics_filepaths: List[str] = []
+    slides_filepaths: List[str] = []
     for song_name in songs:
         # Get song filename
         song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
@@ -314,10 +351,15 @@ def main() -> None:  # pragma: no cover
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
         pdf_filepaths.append(pdf_filepath)
         # Render lyric files
-        lyrics_md_filepath = render_lyrics_to_markdown_file(
+        lyrics_md_filepath = render_lyrics_to_markdown_text_file(
             song_filename, chordpro_filename, working_directory
         )
-        lyric_filepaths.append(lyrics_md_filepath)
+        lyrics_filepaths.append(lyrics_md_filepath)
+        # Render slides files
+        slides_md_filepath = render_lyrics_to_markdown_slides_file(
+            song_filename, chordpro_filename, working_directory
+        )
+        slides_filepaths.append(slides_md_filepath)
 
     # Combine song PDFs into final packet
     call_pdfunite(pdf_filepaths, source_file_without_ext)
