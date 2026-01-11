@@ -339,7 +339,9 @@ def call_pandoc_slides(final_slides_md_filepath: str) -> None:
     pandoc_args: List[str] = [
         "pandoc",
         final_slides_md_filepath,
-        "-o",
+        "--from",
+        "markdown",
+        "--output",
         final_slides_md_filepath.replace(".md", ".pptx"),
     ]
     logging.debug("Running pandoc: %s", " ".join(pandoc_args))
