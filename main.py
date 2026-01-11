@@ -193,6 +193,9 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
                     lyrics_lines.append("")  # Blank line after title
                     last_line = ""
                     continue
+                # Ignore comment lines starting with #
+                if line.startswith("#"):
+                    continue
                 # Strip directives enclosed in {}
                 line = re.sub(r"\{.*?\}", "", line)
                 # Remove chord annotations enclosed in []
