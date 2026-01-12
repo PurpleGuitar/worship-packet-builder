@@ -106,7 +106,7 @@ def call_chordpro(
     logging.debug("chordpro output: %s", result.stdout)
 
 
-def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> str:
+def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str, transpose: int = 0) -> str:
     """
     Process a single song entry.
     """
@@ -147,7 +147,7 @@ def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str) -> st
             return pdf_filepath
 
     # Call chordpro to generate PDF
-    call_chordpro(config_filepath, pdf_filepath, chordpro_filepath)
+    call_chordpro(config_filepath, pdf_filepath, chordpro_filepath, transpose)
 
     # Return PDF filename.
     return pdf_filepath
@@ -397,14 +397,7 @@ def main() -> None:  # pragma: no cover
                 + f"-transposed-{transpose_key}"
                 + ".pdf",
             )
-            call_chordpro(
-                config_filepath=os.path.join(
-                    working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
-                ),
-                pdf_filepath=transposed_pdf_filepath,
-                chordpro_filepath=os.path.join(working_directory, chordpro_filename),
-                transpose=transpose,
-            )
+            pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory, transpose)
             chords_pdf_filepaths.append(transposed_pdf_filepath)
 
         # Render lyrics to markdown text file
