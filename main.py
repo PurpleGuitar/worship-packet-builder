@@ -388,7 +388,9 @@ def main() -> None:  # pragma: no cover
         transpose_key = song_frontmatter.get("transpose_key", None)
         if transpose_key:
             transpose = song_frontmatter.get("transpose", 0)
-            logging.info("Transposing by %s semitones to key %s", transpose, transpose_key)
+            logging.debug(
+                "Transposing by %s semitones to key %s", transpose, transpose_key
+            )
             transposed_pdf_filepath = os.path.join(
                 working_directory,
                 os.path.splitext(chordpro_filename)[0]
