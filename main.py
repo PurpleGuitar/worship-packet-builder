@@ -77,35 +77,8 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
     return frontmatter
 
 
-def get_chordpro_filename_from_song_name(
-    song_filename: str, working_directory: str
-) -> str:
-    """
-    Get the chordpro filename for a given song entry.
-    """
-
-    # Load markdown file for the song
-    frontmatter = read_markdown_frontmatter(
-        os.path.join(working_directory, song_filename)
-    )
-
-    # Get chordpro filename from frontmatter
-    chordpro_filename = str(frontmatter.get("chordpro"))
-    if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song_filename)
-        sys.exit(1)
-
-    # Ensure file exists
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
-    if not os.path.isfile(chordpro_filepath):
-        logging.error("Chordpro file does not exist: %s", chordpro_filepath)
-        sys.exit(1)
-
-    return chordpro_filename
-
-
 def call_chordpro(
-    config_filepath: str, pdf_filepath: str, chordpro_filepath: str
+    config_filepath: str, pdf_filepath: str, chordpro_filepath: str, transpose: int = 0
 ) -> None:
     """Invoke chordpro with the given parameters"""
     # Create command line to process chordpro file
@@ -115,6 +88,8 @@ def call_chordpro(
         config_filepath,
         "--page-size",
         "letter",
+        "--transpose",
+        str(transpose),
         "--output",
         pdf_filepath,
         chordpro_filepath,
@@ -388,14 +363,47 @@ def main() -> None:  # pragma: no cover
         # Get song filename
         song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
 
-        # Get ChordPro filename for song
-        chordpro_filename = get_chordpro_filename_from_song_name(
-            song_filename, working_directory
+        # Load frontmatter for this song
+        song_frontmatter = read_markdown_frontmatter(
+            os.path.join(working_directory, song_filename)
         )
+
+        # Get chordpro filename from frontmatter
+        chordpro_filename = str(song_frontmatter.get("chordpro"))
+        if not chordpro_filename:
+            logging.error("No chordpro file specified for song: %s", song_filename)
+            sys.exit(1)
+
+        # Ensure file exists
+        chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+        if not os.path.isfile(chordpro_filepath):
+            logging.error("Chordpro file does not exist: %s", chordpro_filepath)
+            sys.exit(1)
 
         # Render ChordPro to PDF
         pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
         chords_pdf_filepaths.append(pdf_filepath)
+
+        # If transpose is specified in frontmatter, re-render with transposition
+        transpose_key = song_frontmatter.get("transpose_key", None)
+        if transpose_key:
+            transpose = song_frontmatter.get("transpose", 0)
+            logging.info("Transposing by %s semitones to key %s", transpose, transpose_key)
+            transposed_pdf_filepath = os.path.join(
+                working_directory,
+                os.path.splitext(chordpro_filename)[0]
+                + f"-transposed-{transpose_key}"
+                + ".pdf",
+            )
+            call_chordpro(
+                config_filepath=os.path.join(
+                    working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
+                ),
+                pdf_filepath=transposed_pdf_filepath,
+                chordpro_filepath=os.path.join(working_directory, chordpro_filename),
+                transpose=transpose,
+            )
+            chords_pdf_filepaths.append(transposed_pdf_filepath)
 
         # Render lyrics to markdown text file
         lyrics_md_filepath = render_lyrics_to_markdown_text_file(
