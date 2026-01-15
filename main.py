@@ -106,12 +106,20 @@ def call_chordpro(
     logging.debug("chordpro output: %s", result.stdout)
 
 
-def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str, transpose: int = 0) -> str:
+def render_chordpro_to_pdf(
+    chordpro_filename: str,
+    working_directory: str,
+    transpose: int = 0,
+    transpose_key: str = "",
+) -> str:
     """
     Process a single song entry.
     """
 
     chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+
+    # Use regex to strip off the final part of the filename, e.g. "-D.txt"
+    chordpro_filename_base = re.sub(r"-[A-G][#b]?\.txt$", "", chordpro_filename)
 
     # Get chordpro filename without extension
     chordpro_filename_without_ext, _ = os.path.splitext(chordpro_filepath)
@@ -132,19 +140,25 @@ def render_chordpro_to_pdf(chordpro_filename: str, working_directory: str, trans
             working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
         )
 
-    # Get the latest modification time of the chordpro file and config file
-    chordpro_mtime = os.path.getmtime(chordpro_filepath)
-    config_mtime = os.path.getmtime(config_filepath)
-    latest_mtime = max(chordpro_mtime, config_mtime)
+    # Get PDF filepath
+    if transpose_key:
+        pdf_filepath = os.path.join(
+            working_directory,
+            chordpro_filename_base + f"-{transpose_key}" + ".pdf",
+        )
+    else:
+        pdf_filepath = os.path.join(
+            working_directory, chordpro_filename_without_ext + ".pdf"
+        )
 
-    # Is there already a PDF for this chart? If so, does it have a newer timestamp?
-    pdf_filepath = os.path.join(
-        working_directory, chordpro_filename_without_ext + ".pdf"
-    )
-    if os.path.isfile(pdf_filepath):
-        if os.path.getmtime(pdf_filepath) >= latest_mtime:
-            logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
-            return pdf_filepath
+    # # Is there already a PDF for this chart? If so, does it have a newer timestamp?
+    # chordpro_mtime = os.path.getmtime(chordpro_filepath)
+    # config_mtime = os.path.getmtime(config_filepath)
+    # latest_mtime = max(chordpro_mtime, config_mtime)
+    # if os.path.isfile(pdf_filepath):
+    #     if os.path.getmtime(pdf_filepath) >= latest_mtime:
+    #         logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
+    #         return pdf_filepath
 
     # Call chordpro to generate PDF
     call_chordpro(config_filepath, pdf_filepath, chordpro_filepath, transpose)
@@ -391,13 +405,9 @@ def main() -> None:  # pragma: no cover
             logging.debug(
                 "Transposing by %s semitones to key %s", transpose, transpose_key
             )
-            transposed_pdf_filepath = os.path.join(
-                working_directory,
-                os.path.splitext(chordpro_filename)[0]
-                + f"-transposed-{transpose_key}"
-                + ".pdf",
+            transposed_pdf_filepath = render_chordpro_to_pdf(
+                chordpro_filename, working_directory, transpose, transpose_key
             )
-            pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory, transpose)
             chords_pdf_filepaths.append(transposed_pdf_filepath)
 
         # Render lyrics to markdown text file
