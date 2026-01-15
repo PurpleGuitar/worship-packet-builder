@@ -103,7 +103,8 @@ def call_chordpro(
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
-    logging.debug("chordpro output: %s", result.stdout)
+    if result.stdout:
+        logging.info("chordpro output: %s", result.stdout)
 
 
 def render_chordpro_to_pdf(
@@ -320,7 +321,8 @@ def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> Non
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
-    logging.debug("pdfunite output: %s", result.stdout)
+    if result.stdout:
+        logging.info("pdfunite output: %s", result.stdout)
 
 
 def call_pandoc_slides(final_slides_md_filepath: str) -> None:
@@ -340,7 +342,8 @@ def call_pandoc_slides(final_slides_md_filepath: str) -> None:
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
-    logging.debug("pandoc output: %s", result.stdout)
+    if result.stdout:
+        logging.info("pandoc output: %s", result.stdout)    
 
 
 def main() -> None:  # pragma: no cover
