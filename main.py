@@ -78,14 +78,19 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
 
 
 def call_chordpro(
-    config_filepath: str, pdf_filepath: str, chordpro_filepath: str, transpose: int = 0
+    config_filepath1: str, config_filepath2: str, pdf_filepath: str, chordpro_filepath: str, transpose: int = 0
 ) -> None:
     """Invoke chordpro with the given parameters"""
     # Create command line to process chordpro file
     chordpro_args: List[str] = [
         "chordpro",
         "--config",
-        config_filepath,
+        config_filepath1,
+    ]
+    if config_filepath1 != config_filepath2:
+        chordpro_args.extend([
+            "--config", config_filepath2])
+    chordpro_args.extend([
         "--page-size",
         "letter",
         "--transpose",
@@ -93,7 +98,7 @@ def call_chordpro(
         "--output",
         pdf_filepath,
         chordpro_filepath,
-    ]
+    ])
 
     # Invoke chordpro program
     logging.debug("Running chordpro: %s", " ".join(chordpro_args))
@@ -126,6 +131,9 @@ def render_chordpro_to_pdf(
     chordpro_filename_without_ext, _ = os.path.splitext(chordpro_filepath)
 
     # Look for custom chordpro config file, otherwise use default
+    default_config_filepath = os.path.join(
+        working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
+    )
     chordpro_custom_config_filename = chordpro_filename_without_ext + ".json"
     chordpro_custom_config_filepath = os.path.join(
         working_directory, chordpro_custom_config_filename
@@ -136,10 +144,8 @@ def render_chordpro_to_pdf(
         )
         config_filepath = chordpro_custom_config_filepath
     else:
+        config_filepath = default_config_filepath
         logging.debug("Using default chordpro config file")
-        config_filepath = os.path.join(
-            working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
-        )
 
     # Get PDF filepath
     if transpose_key:
@@ -162,7 +168,7 @@ def render_chordpro_to_pdf(
     #         return pdf_filepath
 
     # Call chordpro to generate PDF
-    call_chordpro(config_filepath, pdf_filepath, chordpro_filepath, transpose)
+    call_chordpro(default_config_filepath, config_filepath, pdf_filepath, chordpro_filepath, transpose)
 
     # Return PDF filename.
     return pdf_filepath
