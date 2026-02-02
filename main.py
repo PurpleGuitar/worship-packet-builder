@@ -333,6 +333,8 @@ def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> Non
 
 def call_pandoc_slides(final_slides_md_filepath: str) -> None:
     """Invoke pandoc to convert markdown slides to PDF"""
+    # Extract directory from filepath
+    slides_directory = os.path.dirname(final_slides_md_filepath)
     pandoc_args: List[str] = [
         "pandoc",
         final_slides_md_filepath,
@@ -340,6 +342,8 @@ def call_pandoc_slides(final_slides_md_filepath: str) -> None:
         "markdown",
         "--output",
         final_slides_md_filepath.replace(".md", ".pptx"),
+        "--reference-doc",
+        slides_directory + "/template.pptx",
     ]
     logging.debug("Running pandoc: %s", " ".join(pandoc_args))
     result = subprocess.run(pandoc_args, capture_output=True, text=True, check=False)
