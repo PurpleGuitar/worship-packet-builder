@@ -78,7 +78,11 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
 
 
 def call_chordpro(
-    config_filepath1: str, config_filepath2: str, pdf_filepath: str, chordpro_filepath: str, transpose: int = 0
+    config_filepath1: str,
+    config_filepath2: str,
+    pdf_filepath: str,
+    chordpro_filepath: str,
+    transpose: int = 0,
 ) -> None:
     """Invoke chordpro with the given parameters"""
     # Create command line to process chordpro file
@@ -88,17 +92,18 @@ def call_chordpro(
         config_filepath1,
     ]
     if config_filepath1 != config_filepath2:
-        chordpro_args.extend([
-            "--config", config_filepath2])
-    chordpro_args.extend([
-        "--page-size",
-        "letter",
-        "--transpose",
-        str(transpose),
-        "--output",
-        pdf_filepath,
-        chordpro_filepath,
-    ])
+        chordpro_args.extend(["--config", config_filepath2])
+    chordpro_args.extend(
+        [
+            "--page-size",
+            "letter",
+            "--transpose",
+            str(transpose),
+            "--output",
+            pdf_filepath,
+            chordpro_filepath,
+        ]
+    )
 
     # Invoke chordpro program
     logging.debug("Running chordpro: %s", " ".join(chordpro_args))
@@ -168,7 +173,13 @@ def render_chordpro_to_pdf(
     #         return pdf_filepath
 
     # Call chordpro to generate PDF
-    call_chordpro(default_config_filepath, config_filepath, pdf_filepath, chordpro_filepath, transpose)
+    call_chordpro(
+        default_config_filepath,
+        config_filepath,
+        pdf_filepath,
+        chordpro_filepath,
+        transpose,
+    )
 
     # Return PDF filename.
     return pdf_filepath
@@ -192,6 +203,9 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
                 # Ignore comment lines starting with #
                 if line.startswith("#"):
                     continue
+                # Replace instrumentals with (Instrumental)
+                if re.match(r".*comment.*instrumental.*", line, re.IGNORECASE):
+                    line = "(Instrumental)"
                 # Strip directives enclosed in {}
                 line = re.sub(r"\{.*?\}", "", line)
                 # Remove chord annotations enclosed in []
@@ -238,7 +252,7 @@ def convert_lyrics_to_slides(lyrics_text: str) -> str:
             section_lines.append(line)
             continue
 
-        # Repeat directives: If the line reads something like "(PLAY 2 TIMES)"
+        # Repeat directives: If the line reads something like "(PLAY 3 TIMES)"
         # which means we should repeat the previous section twice.
         repeat_match = re.match(r"\(PLAY (\d+) TIMES\)", line.strip().upper())
         if repeat_match:
@@ -259,6 +273,12 @@ def convert_lyrics_to_slides(lyrics_text: str) -> str:
         if ";" in line:
             parts = line.split(";")
             line = "  \n".join(part.strip() for part in parts)
+
+        # If line is "(Instrumental)", replace it with a slide break,
+        # since it's usually a cue to play without singing
+        if line.strip() == "(Instrumental)":
+            markdown_lines.append("\n::: notes\n(blank slide)\n:::\n\n---\n")
+            continue
 
         # Regular lyric, but there are already at least 2 lyrics on this slide
         if len(slide_lines) >= 2:
@@ -353,7 +373,7 @@ def call_pandoc_slides(final_slides_md_filepath: str) -> None:
         logging.error("stderr: %s", result.stderr)
         sys.exit(1)
     if result.stdout:
-        logging.info("pandoc output: %s", result.stdout)    
+        logging.info("pandoc output: %s", result.stdout)
 
 
 def main() -> None:  # pragma: no cover
