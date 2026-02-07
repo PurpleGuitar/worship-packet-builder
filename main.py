@@ -382,6 +382,9 @@ def main() -> None:  # pragma: no cover
 
     # Process each song in the list
     songs = frontmatter.get("songs", [])
+    if not songs:
+        logging.warning("No songs found in frontmatter. Nothing to do.")
+        sys.exit(0)
     chords_pdf_filepaths: List[str] = []
     lyrics_filepaths: List[str] = []
     slides_filepaths: List[str] = []
