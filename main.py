@@ -1,4 +1,4 @@
-""" TODO: Build a worship team packet """
+""" Build a worship team packet """
 
 # Standard imports
 from argparse import ArgumentParser, Namespace
@@ -119,7 +119,8 @@ def call_chordpro(
 
 def render_chordpro_to_pdf(
     chordpro_filename: str,
-    working_directory: str,
+    music_folder: str,
+    output_folder: str,
     transpose: int = 0,
     transpose_key: str = "",
 ) -> str:
@@ -127,41 +128,43 @@ def render_chordpro_to_pdf(
     Process a single song entry.
     """
 
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    chordpro_filepath = os.path.join(music_folder, chordpro_filename)
 
     # Use regex to strip off the final part of the filename, e.g. "-D.txt"
     chordpro_filename_base = re.sub(r"-[A-G][#b]?\.txt$", "", chordpro_filename)
 
     # Get chordpro filename without extension
-    chordpro_filename_without_ext, _ = os.path.splitext(chordpro_filepath)
+    chordpro_filename_base_without_ext, _ = os.path.splitext(chordpro_filename_base)
 
-    # Look for custom chordpro config file, otherwise use default
+    # Get default config file.
     default_config_filepath = os.path.join(
-        working_directory, CHORDPRO_CONFIG_DEFAULT_FILENAME
+        music_folder, CHORDPRO_CONFIG_DEFAULT_FILENAME
     )
-    chordpro_custom_config_filename = chordpro_filename_without_ext + ".json"
+    logging.debug("Default config filepath: %s", default_config_filepath)
+
+    # Get custom config file.
+    chordpro_custom_config_filename = chordpro_filename_base_without_ext + ".json"
     chordpro_custom_config_filepath = os.path.join(
-        working_directory, chordpro_custom_config_filename
+        music_folder, chordpro_custom_config_filename
     )
     if os.path.isfile(chordpro_custom_config_filepath):
-        logging.debug(
-            "Using custom chordpro config file: %s", chordpro_custom_config_filepath
-        )
+        logging.debug("Found custom config file: %s", chordpro_custom_config_filepath)
         config_filepath = chordpro_custom_config_filepath
     else:
         config_filepath = default_config_filepath
-        logging.debug("Using default chordpro config file")
 
     # Get PDF filepath
+    logging.debug("output_folder: %s", output_folder)
     if transpose_key:
         pdf_filepath = os.path.join(
-            working_directory,
+            output_folder,
             chordpro_filename_base + f"-{transpose_key}" + ".pdf",
         )
     else:
         pdf_filepath = os.path.join(
-            working_directory, chordpro_filename_without_ext + ".pdf"
+            output_folder, chordpro_filename_base_without_ext + ".pdf"
         )
+    logging.debug("PDF filepath: %s", pdf_filepath)
 
     # # Is there already a PDF for this chart? If so, does it have a newer timestamp?
     # chordpro_mtime = os.path.getmtime(chordpro_filepath)
@@ -299,15 +302,15 @@ def convert_lyrics_to_slides(lyrics_text: str) -> str:
 
 
 def render_lyrics_to_markdown_text_file(
-    song_filename: str, chordpro_filename: str, working_directory: str
+    song_filename: str, chordpro_filename: str, music_folder: str, output_folder: str
 ) -> str:
     """
     Render lyrics from a ChordPro file to a Markdown file.
     """
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    chordpro_filepath = os.path.join(music_folder, chordpro_filename)
     lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
     lyrics_md_filepath = os.path.join(
-        working_directory,
+        output_folder,
         os.path.splitext(song_filename)[0] + "-lyrics.md",
     )
     with open(lyrics_md_filepath, "w", encoding="utf-8") as f:
@@ -317,16 +320,16 @@ def render_lyrics_to_markdown_text_file(
 
 
 def render_lyrics_to_markdown_slides_file(
-    song_filename: str, chordpro_filename: str, working_directory: str
+    song_filename: str, chordpro_filename: str, music_folder: str, output_folder: str
 ) -> str:
     """
     Render lyrics from a ChordPro file to a Markdown slides file.
     """
-    chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+    chordpro_filepath = os.path.join(music_folder, chordpro_filename)
     lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
     slides_markdown = convert_lyrics_to_slides(lyrics_text)
     slides_md_filepath = os.path.join(
-        working_directory,
+        output_folder,
         os.path.splitext(song_filename)[0] + "-slides.md",
     )
     with open(slides_md_filepath, "w", encoding="utf-8") as f:
@@ -335,11 +338,17 @@ def render_lyrics_to_markdown_slides_file(
     return slides_md_filepath
 
 
-def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> None:
+def call_pdfunite(
+    pdf_filenames: List[str], source_file_basename_without_ext: str, output_folder: str
+) -> None:
     """Invoke pdfunite to combine PDF files"""
     pdfunite_args: List[str] = ["pdfunite"]
     pdfunite_args.extend(pdf_filenames)
-    pdfunite_args.append(source_file_without_ext + "-worship-music.pdf")
+    pdfunite_args.append(
+        os.path.join(
+            output_folder, source_file_basename_without_ext + "-worship-music.pdf"
+        )
+    )
     logging.debug("Running pdfunite: %s", " ".join(pdfunite_args))
     result = subprocess.run(pdfunite_args, capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -351,7 +360,9 @@ def call_pdfunite(pdf_filenames: List[str], source_file_without_ext: str) -> Non
         logging.info("pdfunite output: %s", result.stdout)
 
 
-def call_pandoc_slides(final_slides_md_filepath: str) -> None:
+def call_pandoc_slides(
+    final_slides_md_filepath: str, music_folder: str, output_folder: str
+) -> None:
     """Invoke pandoc to convert markdown slides to PDF"""
     # Extract directory from filepath
     slides_directory = os.path.dirname(final_slides_md_filepath)
@@ -361,9 +372,12 @@ def call_pandoc_slides(final_slides_md_filepath: str) -> None:
         "--from",
         "markdown",
         "--output",
-        final_slides_md_filepath.replace(".md", ".pptx"),
+        os.path.join(
+            output_folder,
+            os.path.basename(final_slides_md_filepath.replace(".md", ".pptx")),
+        ),
         "--reference-doc",
-        slides_directory + "/template.pptx",
+        os.path.join(music_folder, "template.pptx"),
     ]
     logging.debug("Running pandoc: %s", " ".join(pandoc_args))
     result = subprocess.run(pandoc_args, capture_output=True, text=True, check=False)
@@ -387,11 +401,22 @@ def main() -> None:  # pragma: no cover
         logging.error("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
         sys.exit(1)
     logging.debug("Source file: %s", source_file)
-    source_file_without_ext, _ = os.path.splitext(source_file)
+    source_file_basename = os.path.basename(source_file)
+    source_file_basename_without_ext, _ = os.path.splitext(source_file_basename)
 
-    # Infer working directory from source file
-    working_directory = os.path.dirname(source_file)
-    logging.debug("Working directory: %s", working_directory)
+    # Read name of the music folder from WORSHIP_PACKET_MUSIC_FOLDER environment variable.
+    music_folder = os.getenv("WORSHIP_PACKET_MUSIC_FOLDER")
+    if not music_folder:
+        logging.error("WORSHIP_PACKET_MUSIC_FOLDER environment variable not set")
+        sys.exit(1)
+    logging.debug("Music folder: %s", music_folder)
+
+    # Read name of the output folder from WORSHIP_PACKET_OUTPUT_FOLDER environment variable.
+    output_folder = os.getenv("WORSHIP_PACKET_OUTPUT_FOLDER")
+    if not output_folder:
+        logging.error("WORSHIP_PACKET_OUTPUT_FOLDER environment variable not set")
+        sys.exit(1)
+    logging.debug("Output folder: %s", output_folder)
 
     # Read and parse markdown file
     try:
@@ -415,23 +440,30 @@ def main() -> None:  # pragma: no cover
 
         # Load frontmatter for this song
         song_frontmatter = read_markdown_frontmatter(
-            os.path.join(working_directory, song_filename)
+            os.path.join(music_folder, song_filename)
         )
 
-        # Get chordpro filename from frontmatter
+        # Get chordpro filename from frontmatter, extracting from link brackets if needed
         chordpro_filename = str(song_frontmatter.get("chordpro"))
+        link_match = re.match(r"\[\[(.+)\]\]", chordpro_filename)
+        if link_match:
+            chordpro_filename = link_match.group(1)
+
+        # Ensure chordpro file exists
         if not chordpro_filename:
             logging.error("No chordpro file specified for song: %s", song_filename)
             sys.exit(1)
 
-        # Ensure file exists
-        chordpro_filepath = os.path.join(working_directory, chordpro_filename)
+        # Get chordpro filepath
+        chordpro_filepath = os.path.join(music_folder, chordpro_filename)
         if not os.path.isfile(chordpro_filepath):
             logging.error("Chordpro file does not exist: %s", chordpro_filepath)
             sys.exit(1)
 
         # Render ChordPro to PDF
-        pdf_filepath = render_chordpro_to_pdf(chordpro_filename, working_directory)
+        pdf_filepath = render_chordpro_to_pdf(
+            chordpro_filename, music_folder, output_folder
+        )
         chords_pdf_filepaths.append(pdf_filepath)
 
         # If transpose is specified in frontmatter, re-render with transposition
@@ -442,30 +474,36 @@ def main() -> None:  # pragma: no cover
                 "Transposing by %s semitones to key %s", transpose, transpose_key
             )
             transposed_pdf_filepath = render_chordpro_to_pdf(
-                chordpro_filename, working_directory, transpose, transpose_key
+                chordpro_filename, music_folder, output_folder, transpose, transpose_key
             )
             chords_pdf_filepaths.append(transposed_pdf_filepath)
 
         # Render lyrics to markdown text file
         lyrics_md_filepath = render_lyrics_to_markdown_text_file(
-            song_filename, chordpro_filename, working_directory
+            song_filename, chordpro_filename, music_folder, output_folder
         )
         lyrics_filepaths.append(lyrics_md_filepath)
 
         # Render lyrics to slides markdown file
         slides_md_filepath = render_lyrics_to_markdown_slides_file(
-            song_filename, chordpro_filename, working_directory
+            song_filename, chordpro_filename, music_folder, output_folder
         )
         slides_filepaths.append(slides_md_filepath)
 
         # Convert slides markdown to PPTX
-        call_pandoc_slides(slides_md_filepath)
+        call_pandoc_slides(slides_md_filepath, music_folder, output_folder)
 
     # Combine chord PDFs into final packet
-    call_pdfunite(chords_pdf_filepaths, source_file_without_ext)
+    call_pdfunite(
+        chords_pdf_filepaths,
+        source_file_basename_without_ext + ".pdf",
+        output_folder,
+    )
 
     # Combine lyrics markdown files into final lyrics file
-    final_lyrics_md_filepath = source_file_without_ext + "-lyrics.md"
+    final_lyrics_md_filepath = os.path.join(
+        output_folder, source_file_basename_without_ext + "-lyrics.md"
+    )
     with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
         for lyrics_md_filepath in lyrics_filepaths:
             with open(lyrics_md_filepath, "r", encoding="utf-8") as lf:
@@ -473,13 +511,15 @@ def main() -> None:  # pragma: no cover
                 f.write("\n\n")
 
     # Combine slides markdown files into final slides file
-    final_slides_md_filepath = source_file_without_ext + "-slides.md"
+    final_slides_md_filepath = os.path.join(
+        output_folder, source_file_basename_without_ext + "-slides.md"
+    )
     with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
         for slides_md_filepath in slides_filepaths:
             with open(slides_md_filepath, "r", encoding="utf-8") as sf:
                 f.write(sf.read())
                 f.write("\n\n---\n\n")  # Slide break between songs
-    call_pandoc_slides(final_slides_md_filepath)
+    call_pandoc_slides(final_slides_md_filepath, music_folder, output_folder)
 
 
 if __name__ == "__main__":  # pragma: no cover
