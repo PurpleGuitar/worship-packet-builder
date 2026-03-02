@@ -78,8 +78,8 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
 
 
 def call_chordpro(
-    config_filepath1: str,
-    config_filepath2: str,
+    default_config_filepath: str,
+    custom_config_filepath: str,
     pdf_filepath: str,
     chordpro_filepath: str,
     transpose: int = 0,
@@ -89,10 +89,10 @@ def call_chordpro(
     chordpro_args: List[str] = [
         "chordpro",
         "--config",
-        config_filepath1,
+        default_config_filepath,
     ]
-    if config_filepath1 != config_filepath2:
-        chordpro_args.extend(["--config", config_filepath2])
+    if custom_config_filepath != "":
+        chordpro_args.extend(["--config", custom_config_filepath])
     chordpro_args.extend(
         [
             "--page-size",
@@ -129,12 +129,11 @@ def render_chordpro_to_pdf(
     """
 
     chordpro_filepath = os.path.join(music_folder, chordpro_filename)
-
-    # Use regex to strip off the final part of the filename, e.g. "-D.txt"
-    chordpro_filename_base = re.sub(r"-[A-G][#b]?\.txt$", "", chordpro_filename)
-
-    # Get chordpro filename without extension
-    chordpro_filename_base_without_ext, _ = os.path.splitext(chordpro_filename_base)
+    chordpro_basename = os.path.basename(chordpro_filepath)
+    chordpro_basename_without_ext, _ = os.path.splitext(chordpro_basename)
+    chordpro_basename_without_ext_and_chord = re.sub(
+        r"-[A-G][#b]?$", "", chordpro_basename_without_ext
+    )
 
     # Get default config file.
     default_config_filepath = os.path.join(
@@ -143,37 +142,28 @@ def render_chordpro_to_pdf(
     logging.debug("Default config filepath: %s", default_config_filepath)
 
     # Get custom config file.
-    chordpro_custom_config_filename = chordpro_filename_base_without_ext + ".json"
+    chordpro_custom_config_basename = chordpro_basename_without_ext + ".json"
     chordpro_custom_config_filepath = os.path.join(
-        music_folder, chordpro_custom_config_filename
+        music_folder, chordpro_custom_config_basename
     )
     if os.path.isfile(chordpro_custom_config_filepath):
         logging.debug("Found custom config file: %s", chordpro_custom_config_filepath)
         config_filepath = chordpro_custom_config_filepath
     else:
-        config_filepath = default_config_filepath
+        config_filepath = ""
 
     # Get PDF filepath
     logging.debug("output_folder: %s", output_folder)
     if transpose_key:
         pdf_filepath = os.path.join(
             output_folder,
-            chordpro_filename_base + f"-{transpose_key}" + ".pdf",
+            chordpro_basename_without_ext_and_chord + f"-{transpose_key}" + ".pdf",
         )
     else:
         pdf_filepath = os.path.join(
-            output_folder, chordpro_filename_base_without_ext + ".pdf"
+            output_folder, chordpro_basename_without_ext + ".pdf"
         )
     logging.debug("PDF filepath: %s", pdf_filepath)
-
-    # # Is there already a PDF for this chart? If so, does it have a newer timestamp?
-    # chordpro_mtime = os.path.getmtime(chordpro_filepath)
-    # config_mtime = os.path.getmtime(config_filepath)
-    # latest_mtime = max(chordpro_mtime, config_mtime)
-    # if os.path.isfile(pdf_filepath):
-    #     if os.path.getmtime(pdf_filepath) >= latest_mtime:
-    #         logging.debug("PDF %s is up to date; skipping generation", pdf_filepath)
-    #         return pdf_filepath
 
     # Call chordpro to generate PDF
     call_chordpro(
@@ -231,7 +221,7 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
     return lyrics_text
 
 
-def convert_lyrics_to_slides(lyrics_text: str) -> str:
+def convert_lyrics_to_slides(lyrics_text: str, num_lines_per_slide: int) -> str:
     """Convert plain lyrics text to Markdown format."""
     markdown_lines: List[str] = []
     slide_lines: List[str] = []
@@ -283,8 +273,8 @@ def convert_lyrics_to_slides(lyrics_text: str) -> str:
             markdown_lines.append("\n::: notes\n(blank slide)\n:::\n\n---\n")
             continue
 
-        # Regular lyric, but there are already at least 2 lyrics on this slide
-        if len(slide_lines) >= 2:
+        # Regular lyric, but there are already max number of lines on the slide
+        if len(slide_lines) >= num_lines_per_slide:
             markdown_lines.append("\n---\n")
             markdown_lines.append(line + "  ")
             slide_lines = [line + "  "]
@@ -320,14 +310,18 @@ def render_lyrics_to_markdown_text_file(
 
 
 def render_lyrics_to_markdown_slides_file(
-    song_filename: str, chordpro_filename: str, music_folder: str, output_folder: str
+    song_filename: str,
+    chordpro_filename: str,
+    music_folder: str,
+    output_folder: str,
+    num_lines_per_slide: int,
 ) -> str:
     """
     Render lyrics from a ChordPro file to a Markdown slides file.
     """
     chordpro_filepath = os.path.join(music_folder, chordpro_filename)
     lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
-    slides_markdown = convert_lyrics_to_slides(lyrics_text)
+    slides_markdown = convert_lyrics_to_slides(lyrics_text, num_lines_per_slide)
     slides_md_filepath = os.path.join(
         output_folder,
         os.path.splitext(song_filename)[0] + "-slides.md",
@@ -365,7 +359,6 @@ def call_pandoc_slides(
 ) -> None:
     """Invoke pandoc to convert markdown slides to PDF"""
     # Extract directory from filepath
-    slides_directory = os.path.dirname(final_slides_md_filepath)
     pandoc_args: List[str] = [
         "pandoc",
         final_slides_md_filepath,
@@ -449,6 +442,17 @@ def main() -> None:  # pragma: no cover
         if link_match:
             chordpro_filename = link_match.group(1)
 
+        # Get number of lines per slide for this song, defaulting to 2 if not specified
+        num_lines_per_slide_value = song_frontmatter.get("num_lines_per_slide")
+        if num_lines_per_slide_value:
+            num_lines_per_slide = int(num_lines_per_slide_value)
+            logging.debug("num_lines_per_slide: %d", num_lines_per_slide)
+        else:
+            num_lines_per_slide = 2
+            logging.debug(
+                "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
+            )
+
         # Ensure chordpro file exists
         if not chordpro_filename:
             logging.error("No chordpro file specified for song: %s", song_filename)
@@ -486,7 +490,11 @@ def main() -> None:  # pragma: no cover
 
         # Render lyrics to slides markdown file
         slides_md_filepath = render_lyrics_to_markdown_slides_file(
-            song_filename, chordpro_filename, music_folder, output_folder
+            song_filename,
+            chordpro_filename,
+            music_folder,
+            output_folder,
+            num_lines_per_slide,
         )
         slides_filepaths.append(slides_md_filepath)
 
@@ -496,7 +504,7 @@ def main() -> None:  # pragma: no cover
     # Combine chord PDFs into final packet
     call_pdfunite(
         chords_pdf_filepaths,
-        source_file_basename_without_ext + ".pdf",
+        source_file_basename_without_ext,
         output_folder,
     )
 
