@@ -476,6 +476,11 @@ def process_songs(
         if link_match:
             chordpro_filename = link_match.group(1)
 
+        # Ensure chordpro file exists
+        if not chordpro_filename:
+            logging.error("No chordpro file specified for song: %s", song_filename)
+            sys.exit(1)
+
         # Get number of lines per slide for this song, defaulting to 2 if not specified
         num_lines_per_slide_value = song_frontmatter.get("num_lines_per_slide")
         if num_lines_per_slide_value:
@@ -486,11 +491,6 @@ def process_songs(
             logging.debug(
                 "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
             )
-
-        # Ensure chordpro file exists
-        if not chordpro_filename:
-            logging.error("No chordpro file specified for song: %s", song_filename)
-            sys.exit(1)
 
         # Get chordpro filepath
         chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
