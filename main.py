@@ -1,7 +1,6 @@
 """ Build a worship team packet """
 
 # Standard imports
-from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import Any, Dict, List
 import logging
@@ -49,13 +48,6 @@ def load_external_config() -> ExternalConfig:
     )
     logging.debug("Loaded external config: %s", config)
     return config
-
-
-def parse_args() -> Namespace:  # pragma: no cover
-    """Parse command line arguments"""
-    parser = ArgumentParser(description="Build a worship team packet from a template")
-    parser.add_argument("--trace", action="store_true", help="Enable tracing output")
-    return parser.parse_args()
 
 
 def setup_logging(trace: bool) -> None:  # pragma: no cover
@@ -418,8 +410,6 @@ def call_pandoc_slides(
 
 def main() -> None:  # pragma: no cover
     """Main function"""
-    args = parse_args()
-    setup_logging(args.trace)
 
     try:
         config = load_external_config()
