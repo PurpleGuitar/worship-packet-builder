@@ -56,6 +56,7 @@ def load_external_config() -> Config:
     logging.debug("Loaded external config: %s", config)
     return config
 
+
 def parse_args() -> Namespace:  # pragma: no cover
     """Parse command line arguments"""
     parser = ArgumentParser(description="TODO: Description of this script")
@@ -434,12 +435,6 @@ def main() -> None:  # pragma: no cover
 
     source_file = config.source_file
 
-    music_folder = config.music_folder
-    logging.debug("Music folder: %s", music_folder)
-
-    output_folder = config.output_folder
-    logging.debug("Output folder: %s", output_folder)
-
     # Read and parse markdown file
     try:
         frontmatter = read_markdown_frontmatter(source_file)
@@ -462,7 +457,7 @@ def main() -> None:  # pragma: no cover
 
         # Load frontmatter for this song
         song_frontmatter = read_markdown_frontmatter(
-            os.path.join(music_folder, song_filename)
+            os.path.join(config.music_folder, song_filename)
         )
 
         # Get chordpro filename from frontmatter, extracting from link brackets if needed
@@ -488,14 +483,14 @@ def main() -> None:  # pragma: no cover
             sys.exit(1)
 
         # Get chordpro filepath
-        chordpro_filepath = os.path.join(music_folder, chordpro_filename)
+        chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
         if not os.path.isfile(chordpro_filepath):
             logging.error("Chordpro file does not exist: %s", chordpro_filepath)
             sys.exit(1)
 
         # Render ChordPro to PDF
         pdf_filepath = render_chordpro_to_pdf(
-            chordpro_filename, music_folder, output_folder
+            chordpro_filename, config.music_folder, config.output_folder
         )
         chords_pdf_filepaths.append(pdf_filepath)
 
@@ -507,13 +502,17 @@ def main() -> None:  # pragma: no cover
                 "Transposing by %s semitones to key %s", transpose, transpose_key
             )
             transposed_pdf_filepath = render_chordpro_to_pdf(
-                chordpro_filename, music_folder, output_folder, transpose, transpose_key
+                chordpro_filename,
+                config.music_folder,
+                config.output_folder,
+                transpose,
+                transpose_key,
             )
             chords_pdf_filepaths.append(transposed_pdf_filepath)
 
         # Render lyrics to markdown text file
         lyrics_md_filepath = render_lyrics_to_markdown_text_file(
-            song_filename, chordpro_filename, music_folder, output_folder
+            song_filename, chordpro_filename, config.music_folder, config.output_folder
         )
         lyrics_filepaths.append(lyrics_md_filepath)
 
@@ -521,25 +520,27 @@ def main() -> None:  # pragma: no cover
         slides_md_filepath = render_lyrics_to_markdown_slides_file(
             song_filename,
             chordpro_filename,
-            music_folder,
-            output_folder,
+            config.music_folder,
+            config.output_folder,
             num_lines_per_slide,
         )
         slides_filepaths.append(slides_md_filepath)
 
         # Convert slides markdown to PPTX
-        call_pandoc_slides(slides_md_filepath, music_folder, output_folder)
+        call_pandoc_slides(
+            slides_md_filepath, config.music_folder, config.output_folder
+        )
 
     # Combine chord PDFs into final packet
     call_pdfunite(
         chords_pdf_filepaths,
         config.source_file_basename_without_ext,
-        output_folder,
+        config.output_folder,
     )
 
     # Combine lyrics markdown files into final lyrics file
     final_lyrics_md_filepath = os.path.join(
-        output_folder, config.source_file_basename_without_ext + "-lyrics.md"
+        config.output_folder, config.source_file_basename_without_ext + "-lyrics.md"
     )
     with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
         for lyrics_md_filepath in lyrics_filepaths:
@@ -549,14 +550,16 @@ def main() -> None:  # pragma: no cover
 
     # Combine slides markdown files into final slides file
     final_slides_md_filepath = os.path.join(
-        output_folder, config.source_file_basename_without_ext + "-slides.md"
+        config.output_folder, config.source_file_basename_without_ext + "-slides.md"
     )
     with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
         for slides_md_filepath in slides_filepaths:
             with open(slides_md_filepath, "r", encoding="utf-8") as sf:
                 f.write(sf.read())
                 f.write("\n\n---\n\n")  # Slide break between songs
-    call_pandoc_slides(final_slides_md_filepath, music_folder, output_folder)
+    call_pandoc_slides(
+        final_slides_md_filepath, config.music_folder, config.output_folder
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
