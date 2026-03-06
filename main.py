@@ -422,31 +422,14 @@ def call_pandoc_slides(
         logging.info("pandoc output: %s", result.stdout)
 
 
-def main() -> None:  # pragma: no cover
-    """Main function"""
-    args = parse_args()
-    setup_logging(args.trace)
-
-    try:
-        config = load_external_config()
-    except ValueError as e:
-        logging.error("Error loading external config: %s", e)
-        sys.exit(1)
-
-    source_file = config.source_file
-
-    # Read and parse markdown file
-    try:
-        frontmatter = read_markdown_frontmatter(source_file)
-    except (FileNotFoundError, ValueError) as e:
-        logging.error("Error reading source file: %s", e)
-        sys.exit(1)
-
-    # Process each song in the list
-    songs = frontmatter.get("songs", [])
+def process_songs(
+    songs: List[str], config: Config
+) -> tuple[List[str], List[str], List[str]]:
+    """Process songs and render chords, lyrics, and slides."""
     if not songs:
         logging.warning("No songs found in frontmatter. Nothing to do.")
         sys.exit(0)
+
     chords_pdf_filepaths: List[str] = []
     lyrics_filepaths: List[str] = []
     slides_filepaths: List[str] = []
@@ -530,6 +513,33 @@ def main() -> None:  # pragma: no cover
         call_pandoc_slides(
             slides_md_filepath, config.music_folder, config.output_folder
         )
+
+    return chords_pdf_filepaths, lyrics_filepaths, slides_filepaths
+
+
+def main() -> None:  # pragma: no cover
+    """Main function"""
+    args = parse_args()
+    setup_logging(args.trace)
+
+    try:
+        config = load_external_config()
+    except ValueError as e:
+        logging.error("Error loading external config: %s", e)
+        sys.exit(1)
+
+    # Read and parse markdown file
+    try:
+        frontmatter = read_markdown_frontmatter(config.source_file)
+    except (FileNotFoundError, ValueError) as e:
+        logging.error("Error reading source file: %s", e)
+        sys.exit(1)
+
+    # Process each song in the list
+    songs = frontmatter.get("songs", [])
+    chords_pdf_filepaths, lyrics_filepaths, slides_filepaths = process_songs(
+        songs, config
+    )
 
     # Combine chord PDFs into final packet
     call_pdfunite(
