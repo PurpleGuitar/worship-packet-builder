@@ -422,6 +422,33 @@ def call_pandoc_slides(
         logging.info("pandoc output: %s", result.stdout)
 
 
+def combine_lyrics_files(lyrics_filepaths: List[str], config: Config) -> None:
+    """Combine individual lyrics markdown files into a single file."""
+    final_lyrics_md_filepath = os.path.join(
+        config.output_folder, config.source_file_basename_without_ext + "-lyrics.md"
+    )
+    with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
+        for lyrics_md_filepath in lyrics_filepaths:
+            with open(lyrics_md_filepath, "r", encoding="utf-8") as lf:
+                f.write(lf.read())
+                f.write("\n\n")
+
+
+def combine_slides_files(slides_filepaths: List[str], config: Config) -> None:
+    """Combine individual slides markdown files and render final slides."""
+    final_slides_md_filepath = os.path.join(
+        config.output_folder, config.source_file_basename_without_ext + "-slides.md"
+    )
+    with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
+        for slides_md_filepath in slides_filepaths:
+            with open(slides_md_filepath, "r", encoding="utf-8") as sf:
+                f.write(sf.read())
+                f.write("\n\n---\n\n")  # Slide break between songs
+    call_pandoc_slides(
+        final_slides_md_filepath, config.music_folder, config.output_folder
+    )
+
+
 def process_songs(
     songs: List[str], config: Config
 ) -> tuple[List[str], List[str], List[str]]:
@@ -522,6 +549,7 @@ def main() -> None:  # pragma: no cover
     args = parse_args()
     setup_logging(args.trace)
 
+    # Get external config from environment variables
     try:
         config = load_external_config()
     except ValueError as e:
@@ -530,15 +558,14 @@ def main() -> None:  # pragma: no cover
 
     # Read and parse markdown file
     try:
-        frontmatter = read_markdown_frontmatter(config.source_file)
+        source_frontmatter = read_markdown_frontmatter(config.source_file)
     except (FileNotFoundError, ValueError) as e:
         logging.error("Error reading source file: %s", e)
         sys.exit(1)
 
     # Process each song in the list
-    songs = frontmatter.get("songs", [])
     chords_pdf_filepaths, lyrics_filepaths, slides_filepaths = process_songs(
-        songs, config
+        source_frontmatter.get("songs", []) , config
     )
 
     # Combine chord PDFs into final packet
@@ -549,27 +576,10 @@ def main() -> None:  # pragma: no cover
     )
 
     # Combine lyrics markdown files into final lyrics file
-    final_lyrics_md_filepath = os.path.join(
-        config.output_folder, config.source_file_basename_without_ext + "-lyrics.md"
-    )
-    with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
-        for lyrics_md_filepath in lyrics_filepaths:
-            with open(lyrics_md_filepath, "r", encoding="utf-8") as lf:
-                f.write(lf.read())
-                f.write("\n\n")
+    combine_lyrics_files(lyrics_filepaths, config)
 
     # Combine slides markdown files into final slides file
-    final_slides_md_filepath = os.path.join(
-        config.output_folder, config.source_file_basename_without_ext + "-slides.md"
-    )
-    with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
-        for slides_md_filepath in slides_filepaths:
-            with open(slides_md_filepath, "r", encoding="utf-8") as sf:
-                f.write(sf.read())
-                f.write("\n\n---\n\n")  # Slide break between songs
-    call_pandoc_slides(
-        final_slides_md_filepath, config.music_folder, config.output_folder
-    )
+    combine_slides_files(slides_filepaths, config)
 
 
 if __name__ == "__main__":  # pragma: no cover
