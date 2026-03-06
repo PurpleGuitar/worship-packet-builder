@@ -2,6 +2,7 @@
 
 # Standard imports
 from dataclasses import dataclass
+from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List
 import logging
 import os
@@ -19,19 +20,23 @@ CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
 
 
 @dataclass(frozen=True)
-class ExternalConfig:
+class Config:
     """External configuration loaded from environment variables."""
 
     source_file: str
+    source_file_basename: str
+    source_file_basename_without_ext: str
     music_folder: str
     output_folder: str
 
 
-def load_external_config() -> ExternalConfig:
+def load_external_config() -> Config:
     """Load required external configuration from environment variables."""
     source_file = os.getenv("WORSHIP_PACKET_SOURCE_FILE")
     if not source_file:
         raise ValueError("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
+    source_file_basename = os.path.basename(source_file)
+    source_file_basename_without_ext, _ = os.path.splitext(source_file_basename)
 
     music_folder = os.getenv("WORSHIP_PACKET_MUSIC_FOLDER")
     if not music_folder:
@@ -41,13 +46,21 @@ def load_external_config() -> ExternalConfig:
     if not output_folder:
         raise ValueError("WORSHIP_PACKET_OUTPUT_FOLDER environment variable not set")
 
-    config = ExternalConfig(
+    config = Config(
         source_file=source_file,
+        source_file_basename=source_file_basename,
+        source_file_basename_without_ext=source_file_basename_without_ext,
         music_folder=music_folder,
         output_folder=output_folder,
     )
     logging.debug("Loaded external config: %s", config)
     return config
+
+def parse_args() -> Namespace:  # pragma: no cover
+    """Parse command line arguments"""
+    parser = ArgumentParser(description="TODO: Description of this script")
+    parser.add_argument("--trace", action="store_true", help="Enable tracing output")
+    return parser.parse_args()
 
 
 def setup_logging(trace: bool) -> None:  # pragma: no cover
@@ -410,6 +423,8 @@ def call_pandoc_slides(
 
 def main() -> None:  # pragma: no cover
     """Main function"""
+    args = parse_args()
+    setup_logging(args.trace)
 
     try:
         config = load_external_config()
@@ -418,9 +433,6 @@ def main() -> None:  # pragma: no cover
         sys.exit(1)
 
     source_file = config.source_file
-    logging.debug("Source file: %s", source_file)
-    source_file_basename = os.path.basename(source_file)
-    source_file_basename_without_ext, _ = os.path.splitext(source_file_basename)
 
     music_folder = config.music_folder
     logging.debug("Music folder: %s", music_folder)
@@ -521,13 +533,13 @@ def main() -> None:  # pragma: no cover
     # Combine chord PDFs into final packet
     call_pdfunite(
         chords_pdf_filepaths,
-        source_file_basename_without_ext,
+        config.source_file_basename_without_ext,
         output_folder,
     )
 
     # Combine lyrics markdown files into final lyrics file
     final_lyrics_md_filepath = os.path.join(
-        output_folder, source_file_basename_without_ext + "-lyrics.md"
+        output_folder, config.source_file_basename_without_ext + "-lyrics.md"
     )
     with open(final_lyrics_md_filepath, "w", encoding="utf-8") as f:
         for lyrics_md_filepath in lyrics_filepaths:
@@ -537,7 +549,7 @@ def main() -> None:  # pragma: no cover
 
     # Combine slides markdown files into final slides file
     final_slides_md_filepath = os.path.join(
-        output_folder, source_file_basename_without_ext + "-slides.md"
+        output_folder, config.source_file_basename_without_ext + "-slides.md"
     )
     with open(final_slides_md_filepath, "w", encoding="utf-8") as f:
         for slides_md_filepath in slides_filepaths:
