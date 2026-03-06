@@ -2,6 +2,7 @@
 
 # Standard imports
 from argparse import ArgumentParser, Namespace
+from dataclasses import dataclass
 from typing import Any, Dict, List
 import logging
 import os
@@ -16,6 +17,38 @@ import yaml
 
 # Constants
 CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
+
+
+@dataclass(frozen=True)
+class ExternalConfig:
+    """External configuration loaded from environment variables."""
+
+    source_file: str
+    music_folder: str
+    output_folder: str
+
+
+def load_external_config() -> ExternalConfig:
+    """Load required external configuration from environment variables."""
+    source_file = os.getenv("WORSHIP_PACKET_SOURCE_FILE")
+    if not source_file:
+        raise ValueError("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
+
+    music_folder = os.getenv("WORSHIP_PACKET_MUSIC_FOLDER")
+    if not music_folder:
+        raise ValueError("WORSHIP_PACKET_MUSIC_FOLDER environment variable not set")
+
+    output_folder = os.getenv("WORSHIP_PACKET_OUTPUT_FOLDER")
+    if not output_folder:
+        raise ValueError("WORSHIP_PACKET_OUTPUT_FOLDER environment variable not set")
+
+    config = ExternalConfig(
+        source_file=source_file,
+        music_folder=music_folder,
+        output_folder=output_folder,
+    )
+    logging.debug("Loaded external config: %s", config)
+    return config
 
 
 def parse_args() -> Namespace:  # pragma: no cover
@@ -388,27 +421,21 @@ def main() -> None:  # pragma: no cover
     args = parse_args()
     setup_logging(args.trace)
 
-    # Read name of source file from WORSHIP_PACKET_SOURCE_FILE environment variable
-    source_file = os.getenv("WORSHIP_PACKET_SOURCE_FILE")
-    if not source_file:
-        logging.error("WORSHIP_PACKET_SOURCE_FILE environment variable not set")
+    try:
+        config = load_external_config()
+    except ValueError as e:
+        logging.error("Error loading external config: %s", e)
         sys.exit(1)
+
+    source_file = config.source_file
     logging.debug("Source file: %s", source_file)
     source_file_basename = os.path.basename(source_file)
     source_file_basename_without_ext, _ = os.path.splitext(source_file_basename)
 
-    # Read name of the music folder from WORSHIP_PACKET_MUSIC_FOLDER environment variable.
-    music_folder = os.getenv("WORSHIP_PACKET_MUSIC_FOLDER")
-    if not music_folder:
-        logging.error("WORSHIP_PACKET_MUSIC_FOLDER environment variable not set")
-        sys.exit(1)
+    music_folder = config.music_folder
     logging.debug("Music folder: %s", music_folder)
 
-    # Read name of the output folder from WORSHIP_PACKET_OUTPUT_FOLDER environment variable.
-    output_folder = os.getenv("WORSHIP_PACKET_OUTPUT_FOLDER")
-    if not output_folder:
-        logging.error("WORSHIP_PACKET_OUTPUT_FOLDER environment variable not set")
-        sys.exit(1)
+    output_folder = config.output_folder
     logging.debug("Output folder: %s", output_folder)
 
     # Read and parse markdown file
