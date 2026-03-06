@@ -493,9 +493,8 @@ def process_songs(
             )
 
         # Get chordpro filepath
-        chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
-        if not os.path.isfile(chordpro_filepath):
-            logging.error("Chordpro file does not exist: %s", chordpro_filepath)
+        if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
+            logging.error("Chordpro file does not exist: %s", chordpro_filename)
             sys.exit(1)
 
         # Render ChordPro to PDF
