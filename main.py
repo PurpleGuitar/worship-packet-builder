@@ -487,7 +487,7 @@ def process_songs(
             num_lines_per_slide = int(num_lines_per_slide_value)
             logging.debug("num_lines_per_slide: %d", num_lines_per_slide)
         else:
-            num_lines_per_slide = 2
+            num_lines_per_slide = 4
             logging.debug(
                 "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
             )
