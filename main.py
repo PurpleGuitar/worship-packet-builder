@@ -423,86 +423,94 @@ def process_songs(
     lyrics_filepaths: List[str] = []
     slides_filepaths: List[str] = []
     for song_name in songs:
-
-        # Get song filename
-        song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
-
-        # Load frontmatter for this song
-        song_frontmatter = read_markdown_frontmatter(
-            os.path.join(config.music_folder, song_filename)
+        song_chords_pdf_filepaths, lyrics_md_filepath, slides_md_filepath = (
+            process_song(song_name, config)
         )
-
-        # Get chordpro filename from frontmatter, extracting from link brackets if needed
-        chordpro_filename = str(song_frontmatter.get("chordpro"))
-        link_match = re.match(r"\[\[(.+)\]\]", chordpro_filename)
-        if link_match:
-            chordpro_filename = link_match.group(1)
-
-        # Ensure chordpro file exists
-        if not chordpro_filename:
-            logging.error("No chordpro file specified for song: %s", song_filename)
-            sys.exit(1)
-
-        # Get number of lines per slide for this song, defaulting to 2 if not specified
-        num_lines_per_slide_value = song_frontmatter.get("num_lines_per_slide")
-        if num_lines_per_slide_value:
-            num_lines_per_slide = int(num_lines_per_slide_value)
-            logging.debug("num_lines_per_slide: %d", num_lines_per_slide)
-        else:
-            num_lines_per_slide = 4
-            logging.debug(
-                "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
-            )
-
-        # Get chordpro filepath
-        if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
-            logging.error("Chordpro file does not exist: %s", chordpro_filename)
-            sys.exit(1)
-
-        # Render ChordPro to PDF
-        pdf_filepath = render_chordpro_to_pdf(
-            chordpro_filename, config.music_folder, config.output_folder
-        )
-        chords_pdf_filepaths.append(pdf_filepath)
-
-        # If transpose is specified in frontmatter, re-render with transposition
-        transpose_key = song_frontmatter.get("transpose_key", None)
-        if transpose_key:
-            transpose = song_frontmatter.get("transpose", 0)
-            logging.debug(
-                "Transposing by %s semitones to key %s", transpose, transpose_key
-            )
-            transposed_pdf_filepath = render_chordpro_to_pdf(
-                chordpro_filename,
-                config.music_folder,
-                config.output_folder,
-                transpose,
-                transpose_key,
-            )
-            chords_pdf_filepaths.append(transposed_pdf_filepath)
-
-        # Render lyrics to markdown text file
-        lyrics_md_filepath = render_lyrics_to_markdown_text_file(
-            song_filename, chordpro_filename, config.music_folder, config.output_folder
-        )
+        chords_pdf_filepaths.extend(song_chords_pdf_filepaths)
         lyrics_filepaths.append(lyrics_md_filepath)
+        slides_filepaths.append(slides_md_filepath)
 
-        # Render lyrics to slides markdown file
-        slides_md_filepath = render_lyrics_to_markdown_slides_file(
-            song_filename,
+    return chords_pdf_filepaths, lyrics_filepaths, slides_filepaths
+
+
+def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
+    """Process one song and return generated output file paths."""
+
+    song_chords_pdf_filepaths: List[str] = []
+
+    # Get song filename
+    song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
+
+    # Load frontmatter for this song
+    song_frontmatter = read_markdown_frontmatter(
+        os.path.join(config.music_folder, song_filename)
+    )
+
+    # Get chordpro filename from frontmatter, extracting from link brackets if needed
+    chordpro_filename = str(song_frontmatter.get("chordpro"))
+    link_match = re.match(r"\[\[(.+)\]\]", chordpro_filename)
+    if link_match:
+        chordpro_filename = link_match.group(1)
+
+    # Ensure chordpro file exists
+    if not chordpro_filename:
+        logging.error("No chordpro file specified for song: %s", song_filename)
+        sys.exit(1)
+
+    # Get number of lines per slide for this song, defaulting to 2 if not specified
+    num_lines_per_slide_value = song_frontmatter.get("num_lines_per_slide")
+    if num_lines_per_slide_value:
+        num_lines_per_slide = int(num_lines_per_slide_value)
+        logging.debug("num_lines_per_slide: %d", num_lines_per_slide)
+    else:
+        num_lines_per_slide = 4
+        logging.debug(
+            "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
+        )
+
+    # Get chordpro filepath
+    if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
+        logging.error("Chordpro file does not exist: %s", chordpro_filename)
+        sys.exit(1)
+
+    # Render ChordPro to PDF
+    pdf_filepath = render_chordpro_to_pdf(
+        chordpro_filename, config.music_folder, config.output_folder
+    )
+    song_chords_pdf_filepaths.append(pdf_filepath)
+
+    # If transpose is specified in frontmatter, re-render with transposition
+    transpose_key = song_frontmatter.get("transpose_key", None)
+    if transpose_key:
+        transpose = song_frontmatter.get("transpose", 0)
+        logging.debug("Transposing by %s semitones to key %s", transpose, transpose_key)
+        transposed_pdf_filepath = render_chordpro_to_pdf(
             chordpro_filename,
             config.music_folder,
             config.output_folder,
-            num_lines_per_slide,
+            transpose,
+            transpose_key,
         )
-        slides_filepaths.append(slides_md_filepath)
+        song_chords_pdf_filepaths.append(transposed_pdf_filepath)
 
-        # Convert slides markdown to PPTX
-        call_pandoc_slides(
-            slides_md_filepath, config.music_folder, config.output_folder
-        )
+    # Render lyrics to markdown text file
+    lyrics_md_filepath = render_lyrics_to_markdown_text_file(
+        song_filename, chordpro_filename, config.music_folder, config.output_folder
+    )
 
-    return chords_pdf_filepaths, lyrics_filepaths, slides_filepaths
+    # Render lyrics to slides markdown file
+    slides_md_filepath = render_lyrics_to_markdown_slides_file(
+        song_filename,
+        chordpro_filename,
+        config.music_folder,
+        config.output_folder,
+        num_lines_per_slide,
+    )
+
+    # Convert slides markdown to PPTX
+    call_pandoc_slides(slides_md_filepath, config.music_folder, config.output_folder)
+
+    return song_chords_pdf_filepaths, lyrics_md_filepath, slides_md_filepath
 
 
 def main() -> None:  # pragma: no cover
