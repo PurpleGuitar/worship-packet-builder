@@ -2,6 +2,7 @@
 
 # Standard imports
 from argparse import ArgumentParser, Namespace
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 import logging
 import os
@@ -17,6 +18,15 @@ from config import Config, load_external_config
 
 # Constants
 CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
+
+
+@dataclass
+class SongFileInfo:
+    """Aggregated output file paths produced by processing all songs."""
+
+    chords_pdf_filepaths: List[str] = field(default_factory=list)
+    lyrics_filepaths: List[str] = field(default_factory=list)
+    slides_filepaths: List[str] = field(default_factory=list)
 
 
 def parse_args() -> Namespace:  # pragma: no cover
@@ -414,32 +424,26 @@ def combine_slides_files(slides_filepaths: List[str], config: Config) -> None:
     )
 
 
-def process_songs(
-    songs: List[str], config: Config
-) -> tuple[List[str], List[str], List[str]]:
+def process_songs(songs: List[str], config: Config) -> SongFileInfo:
     """Process songs and render chords, lyrics, and slides."""
     if not songs:
         logging.warning("No songs found in frontmatter. Nothing to do.")
         sys.exit(0)
 
-    chords_pdf_filepaths: List[str] = []
-    lyrics_filepaths: List[str] = []
-    slides_filepaths: List[str] = []
+    result = SongFileInfo()
     for song_name in songs:
-        song_chords_pdf_filepaths, lyrics_md_filepath, slides_md_filepath = (
-            process_song(song_name, config)
-        )
-        chords_pdf_filepaths.extend(song_chords_pdf_filepaths)
-        lyrics_filepaths.append(lyrics_md_filepath)
-        slides_filepaths.append(slides_md_filepath)
+        song_info = process_song(song_name, config)
+        result.chords_pdf_filepaths.extend(song_info.chords_pdf_filepaths)
+        result.lyrics_filepaths.extend(song_info.lyrics_filepaths)
+        result.slides_filepaths.extend(song_info.slides_filepaths)
 
-    return chords_pdf_filepaths, lyrics_filepaths, slides_filepaths
+    return result
 
 
-def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
+def process_song(song_name: str, config: Config) -> SongFileInfo:
     """Process one song and return generated output file paths."""
 
-    song_chords_pdf_filepaths: List[str] = []
+    song_info = SongFileInfo()
 
     # Get song filename
     # Check to make sure format is [[song filename]] and extract filename
@@ -472,10 +476,10 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
         logging.error("No chordpro file specified for song: %s", song_filename)
         sys.exit(1)
 
-    # Get number of lines per slide for this song, defaulting to 2 if not specified
-    num_lines_per_slide_value = song_frontmatter.get("num_lines_per_slide")
-    if num_lines_per_slide_value:
-        num_lines_per_slide = int(num_lines_per_slide_value)
+    # Get number of lines per slide for this song, defaulting to 4 if not specified
+    frontmatter_num_lines_per_slide = song_frontmatter.get("num_lines_per_slide")
+    if frontmatter_num_lines_per_slide:
+        num_lines_per_slide = int(frontmatter_num_lines_per_slide)
         logging.debug("num_lines_per_slide: %d", num_lines_per_slide)
     else:
         num_lines_per_slide = 4
@@ -489,13 +493,12 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
         sys.exit(1)
 
     # Render ChordPro to PDF
-    pdf_filepath = render_chordpro_to_pdf(
+    song_info.chords_pdf_filepaths.append(render_chordpro_to_pdf(
         chordpro_filename, config.music_folder, config.output_folder
-    )
-    song_chords_pdf_filepaths.append(pdf_filepath)
+    ))
 
     # If transpose is specified in frontmatter, re-render with transposition
-    transpose_key = song_frontmatter.get("transpose_key", None)
+    transpose_key = song_frontmatter.get("transpose_key")
     if transpose_key:
         transpose = song_frontmatter.get("transpose", 0)
         logging.debug("Transposing by %s semitones to key %s", transpose, transpose_key)
@@ -506,12 +509,13 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
             transpose,
             transpose_key,
         )
-        song_chords_pdf_filepaths.append(transposed_pdf_filepath)
+        song_info.chords_pdf_filepaths.append(transposed_pdf_filepath)
 
     # Render lyrics to markdown text file
     lyrics_md_filepath = render_lyrics_to_markdown_text_file(
         song_filename, chordpro_filename, config.music_folder, config.output_folder
     )
+    song_info.lyrics_filepaths.append(lyrics_md_filepath)
 
     # Render lyrics to slides markdown file
     slides_md_filepath = render_lyrics_to_markdown_slides_file(
@@ -521,11 +525,12 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
         config.output_folder,
         num_lines_per_slide,
     )
+    song_info.slides_filepaths.append(slides_md_filepath)
 
     # Convert slides markdown to PPTX
     call_pandoc_slides(slides_md_filepath, config.music_folder, config.output_folder)
 
-    return song_chords_pdf_filepaths, lyrics_md_filepath, slides_md_filepath
+    return song_info
 
 
 def main() -> None:  # pragma: no cover
@@ -548,22 +553,22 @@ def main() -> None:  # pragma: no cover
         sys.exit(1)
 
     # Process each song in the list
-    chords_pdf_filepaths, lyrics_filepaths, slides_filepaths = process_songs(
+    song_file_info = process_songs(
         source_frontmatter.get("songs", []), config
     )
 
     # Combine chord PDFs into final packet
     call_pdfunite(
-        chords_pdf_filepaths,
+        song_file_info.chords_pdf_filepaths,
         config.source_file_basename_without_ext,
         config.output_folder,
     )
 
     # Combine lyrics markdown files into final lyrics file
-    combine_lyrics_files(lyrics_filepaths, config)
+    combine_lyrics_files(song_file_info.lyrics_filepaths, config)
 
     # Combine slides markdown files into final slides file
-    combine_slides_files(slides_filepaths, config)
+    combine_slides_files(song_file_info.slides_filepaths, config)
 
 
 if __name__ == "__main__":  # pragma: no cover
