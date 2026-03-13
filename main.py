@@ -75,7 +75,7 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
     frontmatter: Dict[str, Any] = yaml.safe_load(frontmatter_txt)
     if not isinstance(frontmatter, dict):
         logging.error("Frontmatter is not a valid YAML mapping: %s", filepath)
-        raise ValueError("Frontmatter is not a valid YAML mapping: %s" % filepath)
+        raise ValueError(f"Frontmatter is not a valid YAML mapping: {filepath}")
     logging.debug("Parsed frontmatter: %s", frontmatter)
 
     return frontmatter
