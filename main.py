@@ -73,6 +73,9 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
 
     frontmatter_txt = source_content[3:end_frontmatter].strip()
     frontmatter: Dict[str, Any] = yaml.safe_load(frontmatter_txt)
+    if not isinstance(frontmatter, dict):
+        logging.error("Frontmatter is not a valid YAML mapping: %s", filepath)
+        raise ValueError("Frontmatter is not a valid YAML mapping: %s" % filepath)
     logging.debug("Parsed frontmatter: %s", frontmatter)
 
     return frontmatter
@@ -439,6 +442,12 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
     song_chords_pdf_filepaths: List[str] = []
 
     # Get song filename
+    # Check to make sure format is [[song filename]] and extract filename
+    if not re.match(r"\[\[.+\]\]", song_name):
+        logging.error(
+            "Song name '%s' is not in expected format [[song filename]]", song_name
+        )
+        sys.exit(1)
     song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
 
     # Load frontmatter for this song
@@ -446,8 +455,14 @@ def process_song(song_name: str, config: Config) -> tuple[List[str], str, str]:
         os.path.join(config.music_folder, song_filename)
     )
 
-    # Get chordpro filename from frontmatter, extracting from link brackets if needed
-    chordpro_filename = str(song_frontmatter.get("chordpro"))
+    # Get chordpro filename from frontmatter
+    frontmatter_chordpro_filename = song_frontmatter.get("chordpro")
+    if not frontmatter_chordpro_filename:
+        logging.error("No chordpro specified in frontmatter for song: %s", song_filename)
+        sys.exit(1)
+    chordpro_filename = str(frontmatter_chordpro_filename)
+
+    # Extract filename from link if it's in the format [[filename]]
     link_match = re.match(r"\[\[(.+)\]\]", chordpro_filename)
     if link_match:
         chordpro_filename = link_match.group(1)
