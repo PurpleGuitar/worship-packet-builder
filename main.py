@@ -462,7 +462,9 @@ def process_song(song_name: str, config: Config) -> SongFiles:
     # Get chordpro filename from frontmatter
     frontmatter_chordpro_filename = song_frontmatter.get("chordpro")
     if not frontmatter_chordpro_filename:
-        logging.error("No chordpro specified in frontmatter for song: %s", song_filename)
+        logging.error(
+            "No chordpro specified in frontmatter for song: %s", song_filename
+        )
         sys.exit(1)
     chordpro_filename = str(frontmatter_chordpro_filename)
 
@@ -493,9 +495,11 @@ def process_song(song_name: str, config: Config) -> SongFiles:
         sys.exit(1)
 
     # Render ChordPro to PDF
-    song_files.chords_pdf_filepaths.append(render_chordpro_to_pdf(
-        chordpro_filename, config.music_folder, config.output_folder
-    ))
+    song_files.chords_pdf_filepaths.append(
+        render_chordpro_to_pdf(
+            chordpro_filename, config.music_folder, config.output_folder
+        )
+    )
 
     # If transpose is specified in frontmatter, re-render with transposition
     transpose_key = song_frontmatter.get("transpose_key")
@@ -553,9 +557,7 @@ def main() -> None:  # pragma: no cover
         sys.exit(1)
 
     # Process each song in the list
-    all_song_files = process_songs(
-        source_frontmatter.get("songs", []), config
-    )
+    all_song_files = process_songs(source_frontmatter.get("songs", []), config)
 
     # Combine chord PDFs into final packet
     call_pdfunite(
