@@ -31,7 +31,13 @@ class SongFiles:
 
 def parse_args() -> Namespace:  # pragma: no cover
     """Parse command line arguments"""
-    parser = ArgumentParser(description="TODO: Description of this script")
+    parser = ArgumentParser(
+        description=(
+            "Build a worship team packet: render ChordPro songs to chord PDFs, "
+            "extract lyrics to Markdown, generate slide decks, and combine the "
+            "results into a single packet."
+        )
+    )
     parser.add_argument("--trace", action="store_true", help="Enable tracing output")
     return parser.parse_args()
 
