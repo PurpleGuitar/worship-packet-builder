@@ -3,7 +3,7 @@
 # Standard imports
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import logging
 import os
 import re
@@ -214,6 +214,61 @@ def render_chordpro_to_pdf(
 
     # Return PDF filename.
     return pdf_filepath
+
+
+def render_transposed_chord_pdf(
+    chordpro_filename: str,
+    song_filename: str,
+    song_frontmatter: Dict[str, Any],
+    config: Config,
+) -> Optional[str]:
+    """Render a transposed chord PDF if frontmatter requests transposition.
+
+    The transpose_key is always calculated from the original key encoded in
+    the filename suffix. A `transpose_key` in frontmatter is honored only to
+    warn on mismatches; the calculated value wins.
+
+    Returns the PDF path, or None if no transposition was requested.
+    """
+    transpose = int(song_frontmatter.get("transpose", 0) or 0)
+    if not transpose:
+        return None
+
+    chordpro_basename_without_ext, _ = os.path.splitext(
+        os.path.basename(chordpro_filename)
+    )
+    key_match = re.search(r"-([A-G][#b]?)$", chordpro_basename_without_ext)
+    if not key_match:
+        raise ValueError(
+            f"Cannot calculate transpose_key for '{chordpro_filename}': "
+            "filename does not end with a key suffix like '-G' or '-Bb'."
+        )
+    original_key = key_match.group(1)
+    transpose_key = transpose_key_by_semitones(original_key, transpose)
+    logging.debug(
+        "Calculated transpose_key '%s' from original key '%s' + %d semitones",
+        transpose_key,
+        original_key,
+        transpose,
+    )
+    frontmatter_key = song_frontmatter.get("transpose_key")
+    if frontmatter_key and frontmatter_key != transpose_key:
+        logging.warning(
+            "transpose_key '%s' in frontmatter for '%s' does not match "
+            "calculated key '%s' (original %s + %d semitones); using calculated key",
+            frontmatter_key,
+            song_filename,
+            transpose_key,
+            original_key,
+            transpose,
+        )
+    return render_chordpro_to_pdf(
+        chordpro_filename,
+        config.music_folder,
+        config.output_folder,
+        transpose,
+        transpose_key,
+    )
 
 
 def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
@@ -522,46 +577,10 @@ def process_song(song_name: str, config: Config) -> SongFiles:
     )
 
     # If transpose is specified in frontmatter, re-render with transposition.
-    # transpose_key is always calculated from the original key encoded in the
-    # filename suffix. Warn if legacy transpose_key in frontmatter is present
-    # but does not match the calculated value.
-    transpose = int(song_frontmatter.get("transpose", 0) or 0)
-    if transpose:
-        chordpro_basename_without_ext, _ = os.path.splitext(
-            os.path.basename(chordpro_filename)
-        )
-        key_match = re.search(r"-([A-G][#b]?)$", chordpro_basename_without_ext)
-        if not key_match:
-            raise ValueError(
-                f"Cannot calculate transpose_key for '{chordpro_filename}': "
-                "filename does not end with a key suffix like '-G' or '-Bb'."
-            )
-        original_key = key_match.group(1)
-        transpose_key = transpose_key_by_semitones(original_key, transpose)
-        logging.debug(
-            "Calculated transpose_key '%s' from original key '%s' + %d semitones",
-            transpose_key,
-            original_key,
-            transpose,
-        )
-        frontmatter_key = song_frontmatter.get("transpose_key")
-        if frontmatter_key and frontmatter_key != transpose_key:
-            logging.warning(
-                "transpose_key '%s' in frontmatter for '%s' does not match "
-                "calculated key '%s' (original %s + %d semitones); using calculated key",
-                frontmatter_key,
-                song_filename,
-                transpose_key,
-                original_key,
-                transpose,
-            )
-        transposed_pdf_filepath = render_chordpro_to_pdf(
-            chordpro_filename,
-            config.music_folder,
-            config.output_folder,
-            transpose,
-            transpose_key,
-        )
+    transposed_pdf_filepath = render_transposed_chord_pdf(
+        chordpro_filename, song_filename, song_frontmatter, config
+    )
+    if transposed_pdf_filepath:
         song_files.chords_pdf_filepaths.append(transposed_pdf_filepath)
 
     # Render lyrics to markdown text file
