@@ -18,6 +18,24 @@ from config import Config, load_external_config
 
 # Constants
 CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
+CHROMATIC_SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+CHROMATIC_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+
+
+def transpose_key_by_semitones(original_key: str, semitones: int) -> str:
+    """Return the key reached by walking `semitones` steps from `original_key`.
+
+    Matches chordpro's convention: positive semitones yield sharp keys,
+    negative semitones yield flat keys.
+    """
+    if original_key in CHROMATIC_SHARPS:
+        original_idx = CHROMATIC_SHARPS.index(original_key)
+    elif original_key in CHROMATIC_FLATS:
+        original_idx = CHROMATIC_FLATS.index(original_key)
+    else:
+        raise ValueError(f"Unknown key: {original_key}")
+    output_scale = CHROMATIC_FLATS if semitones < 0 else CHROMATIC_SHARPS
+    return output_scale[(original_idx + semitones) % 12]
 
 
 @dataclass
@@ -503,10 +521,29 @@ def process_song(song_name: str, config: Config) -> SongFiles:
         )
     )
 
-    # If transpose is specified in frontmatter, re-render with transposition
-    transpose_key = song_frontmatter.get("transpose_key")
-    if transpose_key:
-        transpose = song_frontmatter.get("transpose", 0)
+    # If transpose is specified in frontmatter, re-render with transposition.
+    # transpose_key can be set explicitly to override the auto-calculated label;
+    # otherwise it's derived from the original key encoded in the filename.
+    transpose = int(song_frontmatter.get("transpose", 0) or 0)
+    if transpose:
+        transpose_key = song_frontmatter.get("transpose_key")
+        if not transpose_key:
+            chordpro_basename_without_ext, _ = os.path.splitext(
+                os.path.basename(chordpro_filename)
+            )
+            key_match = re.search(r"-([A-G][#b]?)$", chordpro_basename_without_ext)
+            if not key_match:
+                raise ValueError(
+                    f"Cannot auto-calculate transpose_key for '{chordpro_filename}': "
+                    "filename does not end with a key suffix like '-G' or '-Bb'. "
+                    "Specify transpose_key in frontmatter."
+                )
+            transpose_key = transpose_key_by_semitones(key_match.group(1), transpose)
+            logging.debug(
+                "Auto-calculated transpose_key '%s' from original key '%s' in filename",
+                transpose_key,
+                key_match.group(1)
+            )
         logging.debug("Transposing by %s semitones to key %s", transpose, transpose_key)
         transposed_pdf_filepath = render_chordpro_to_pdf(
             chordpro_filename,
