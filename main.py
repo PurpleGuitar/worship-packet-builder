@@ -126,7 +126,7 @@ def call_chordpro(
         logging.error("chordpro failed with return code %d", result.returncode)
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"chordpro failed with return code {result.returncode}")
     if result.stdout:
         logging.info("chordpro output: %s", result.stdout)
 
@@ -363,7 +363,7 @@ def call_pdfunite(
         logging.error("pdfunite failed with return code %d", result.returncode)
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"pdfunite failed with return code {result.returncode}")
     if result.stdout:
         logging.info("pdfunite output: %s", result.stdout)
 
@@ -392,7 +392,7 @@ def call_pandoc_slides(
         logging.error("pandoc failed with return code %d", result.returncode)
         logging.error("stdout: %s", result.stdout)
         logging.error("stderr: %s", result.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"pandoc failed with return code {result.returncode}")
     if result.stdout:
         logging.info("pandoc output: %s", result.stdout)
 
@@ -426,11 +426,11 @@ def combine_slides_files(slides_filepaths: List[str], config: Config) -> None:
 
 def process_songs(songs: List[str], config: Config) -> SongFiles:
     """Process songs and render chords, lyrics, and slides."""
+    song_files = SongFiles()
     if not songs:
         logging.warning("No songs found in frontmatter. Nothing to do.")
-        sys.exit(0)
+        return song_files
 
-    song_files = SongFiles()
     for song_name in songs:
         song_info = process_song(song_name, config)
         song_files.chords_pdf_filepaths.extend(song_info.chords_pdf_filepaths)
@@ -448,10 +448,9 @@ def process_song(song_name: str, config: Config) -> SongFiles:
     # Get song filename
     # Check to make sure format is [[song filename]] and extract filename
     if not re.match(r"\[\[.+\]\]", song_name):
-        logging.error(
-            "Song name '%s' is not in expected format [[song filename]]", song_name
+        raise ValueError(
+            f"Song name '{song_name}' is not in expected format [[song filename]]"
         )
-        sys.exit(1)
     song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
 
     # Load frontmatter for this song
@@ -462,10 +461,9 @@ def process_song(song_name: str, config: Config) -> SongFiles:
     # Get chordpro filename from frontmatter
     frontmatter_chordpro_filename = song_frontmatter.get("chordpro")
     if not frontmatter_chordpro_filename:
-        logging.error(
-            "No chordpro specified in frontmatter for song: %s", song_filename
+        raise ValueError(
+            f"No chordpro specified in frontmatter for song: {song_filename}"
         )
-        sys.exit(1)
     chordpro_filename = str(frontmatter_chordpro_filename)
 
     # Extract filename from link if it's in the format [[filename]]
@@ -475,8 +473,7 @@ def process_song(song_name: str, config: Config) -> SongFiles:
 
     # Ensure chordpro file exists
     if not chordpro_filename:
-        logging.error("No chordpro file specified for song: %s", song_filename)
-        sys.exit(1)
+        raise ValueError(f"No chordpro file specified for song: {song_filename}")
 
     # Get number of lines per slide for this song, defaulting to 4 if not specified
     frontmatter_num_lines_per_slide = song_frontmatter.get("num_lines_per_slide")
@@ -491,8 +488,7 @@ def process_song(song_name: str, config: Config) -> SongFiles:
 
     # Get chordpro filepath
     if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
-        logging.error("Chordpro file does not exist: %s", chordpro_filename)
-        sys.exit(1)
+        raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
 
     # Render ChordPro to PDF
     song_files.chords_pdf_filepaths.append(
@@ -557,20 +553,27 @@ def main() -> None:  # pragma: no cover
         sys.exit(1)
 
     # Process each song in the list
-    all_song_files = process_songs(source_frontmatter.get("songs", []), config)
+    try:
+        all_song_files = process_songs(source_frontmatter.get("songs", []), config)
 
-    # Combine chord PDFs into final packet
-    call_pdfunite(
-        all_song_files.chords_pdf_filepaths,
-        config.source_file_basename_without_ext,
-        config.output_folder,
-    )
+        if not all_song_files.chords_pdf_filepaths:
+            return
 
-    # Combine lyrics markdown files into final lyrics file
-    combine_lyrics_files(all_song_files.lyrics_filepaths, config)
+        # Combine chord PDFs into final packet
+        call_pdfunite(
+            all_song_files.chords_pdf_filepaths,
+            config.source_file_basename_without_ext,
+            config.output_folder,
+        )
 
-    # Combine slides markdown files into final slides file
-    combine_slides_files(all_song_files.slides_filepaths, config)
+        # Combine lyrics markdown files into final lyrics file
+        combine_lyrics_files(all_song_files.lyrics_filepaths, config)
+
+        # Combine slides markdown files into final slides file
+        combine_slides_files(all_song_files.slides_filepaths, config)
+    except (RuntimeError, ValueError, FileNotFoundError) as e:
+        logging.error("Error processing packet: %s", e)
+        sys.exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
