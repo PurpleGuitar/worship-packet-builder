@@ -92,24 +92,28 @@ def read_markdown_frontmatter(filepath: str) -> Dict[str, Any]:
             source_content = f.read()
         logging.debug("Read source file: %s", filepath)
     except Exception as e:
-        logging.error("Failed to read source file: %s", e)
-        raise FileNotFoundError(f"Cannot read file: {filepath}") from e
+        message = f"Failed to read source file: {filepath}"
+        logging.error("%s: %s", message, e)
+        raise FileNotFoundError(message) from e
 
     # Extract YAML source frontmatter
     if not source_content.startswith("---"):
-        logging.error("Source file does not start with frontmatter '---'")
-        raise ValueError("Source file does not start with frontmatter '---'")
+        message = f"Source file does not start with frontmatter '---': {filepath}"
+        logging.error("%s", message)
+        raise ValueError(message)
 
     end_frontmatter = source_content.find("---", 3)
     if end_frontmatter == -1:
-        logging.error("No closing '---' found for frontmatter")
-        raise ValueError("No closing '---' found for frontmatter")
+        message = f"No closing '---' found for frontmatter: {filepath}"
+        logging.error("%s", message)
+        raise ValueError(message)
 
     frontmatter_txt = source_content[3:end_frontmatter].strip()
     frontmatter: Dict[str, Any] = yaml.safe_load(frontmatter_txt)
     if not isinstance(frontmatter, dict):
-        logging.error("Frontmatter is not a valid YAML mapping: %s", filepath)
-        raise ValueError(f"Frontmatter is not a valid YAML mapping: {filepath}")
+        message = f"Frontmatter is not a valid YAML mapping: {filepath}"
+        logging.error("%s", message)
+        raise ValueError(message)
     logging.debug("Parsed frontmatter: %s", frontmatter)
 
     return frontmatter
