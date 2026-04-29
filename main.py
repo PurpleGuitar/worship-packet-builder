@@ -18,17 +18,19 @@ from chordpro import (
     extract_lyrics_from_chordpro,
     render_chordpro_to_pdf,
     render_transposed_chord_pdf,
+    extract_sections_from_chordpro
 )
 from config import Config, load_external_config
 
 
 @dataclass
-class SongFiles:
+class SongInfo:
     """Aggregated output file paths produced by processing one or more songs."""
 
     chords_pdf_filepaths: List[str] = field(default_factory=list)
     lyrics_filepaths: List[str] = field(default_factory=list)
     slides_filepaths: List[str] = field(default_factory=list)
+    sections: str = ""
 
 
 def parse_args() -> Namespace:  # pragma: no cover
@@ -137,12 +139,12 @@ def convert_lyrics_to_slides(lyrics_text: str, num_lines_per_slide: int) -> str:
                 markdown_lines.extend(section_lines)
             continue
 
-        # HACKY HACK HACK
-        if line == "There's no god like Jehovah":
-            markdown_lines.append(line + "  ")
-            slide_lines.append(line + "  ")
-            section_lines.append(line + "  ")
-            continue
+        # # HACKY HACK HACK - maybe we don't need this anymore?
+        # if line == "There's no god like Jehovah":
+        #     markdown_lines.append(line + "  ")
+        #     slide_lines.append(line + "  ")
+        #     section_lines.append(line + "  ")
+        #     continue
 
         # If line contains a semicolon, split into two lines
         if ";" in line:
@@ -292,26 +294,30 @@ def combine_slides_files(slides_filepaths: List[str], config: Config) -> None:
     )
 
 
-def process_songs(songs: List[str], config: Config) -> SongFiles:
+def process_songs(songs: List[str], config: Config) -> SongInfo:
     """Process songs and render chords, lyrics, and slides."""
-    song_files = SongFiles()
+    song_infos = SongInfo()
     if not songs:
         logging.warning("No songs found in frontmatter. Nothing to do.")
-        return song_files
+        return song_infos
 
     for song_name in songs:
         song_info = process_song(song_name, config)
-        song_files.chords_pdf_filepaths.extend(song_info.chords_pdf_filepaths)
-        song_files.lyrics_filepaths.extend(song_info.lyrics_filepaths)
-        song_files.slides_filepaths.extend(song_info.slides_filepaths)
+        song_infos.chords_pdf_filepaths.extend(song_info.chords_pdf_filepaths)
+        song_infos.lyrics_filepaths.extend(song_info.lyrics_filepaths)
+        song_infos.slides_filepaths.extend(song_info.slides_filepaths)
+        if song_info.sections:
+            if song_infos.sections:
+                song_infos.sections += "\n"
+            song_infos.sections += song_info.sections
 
-    return song_files
+    return song_infos
 
 
-def process_song(song_name: str, config: Config) -> SongFiles:
+def process_song(song_name: str, config: Config) -> SongInfo:
     """Process one song and return generated output file paths."""
 
-    song_files = SongFiles()
+    song_info = SongInfo()
 
     # Get song filename
     # Check to make sure format is [[song filename]] and extract filename
@@ -319,7 +325,8 @@ def process_song(song_name: str, config: Config) -> SongFiles:
         raise ValueError(
             f"Song name '{song_name}' is not in expected format [[song filename]]"
         )
-    song_filename = song_name[2:-2] + ".md"  # Remove [[ and ]] and add .md
+    song_name_without_braces = song_name[2:-2]
+    song_filename = song_name_without_braces + ".md"  # Remove [[ and ]] and add .md
 
     # Load frontmatter for this song
     song_frontmatter = read_markdown_frontmatter(
@@ -357,9 +364,10 @@ def process_song(song_name: str, config: Config) -> SongFiles:
     # Get chordpro filepath
     if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
         raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
+    chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
 
     # Render ChordPro to PDF
-    song_files.chords_pdf_filepaths.append(
+    song_info.chords_pdf_filepaths.append(
         render_chordpro_to_pdf(
             chordpro_filename, config.music_folder, config.output_folder
         )
@@ -370,13 +378,13 @@ def process_song(song_name: str, config: Config) -> SongFiles:
         chordpro_filename, song_filename, song_frontmatter, config
     )
     if transposed_pdf_filepath:
-        song_files.chords_pdf_filepaths.append(transposed_pdf_filepath)
+        song_info.chords_pdf_filepaths.append(transposed_pdf_filepath)
 
     # Render lyrics to markdown text file
     lyrics_md_filepath = render_lyrics_to_markdown_text_file(
         song_filename, chordpro_filename, config.music_folder, config.output_folder
     )
-    song_files.lyrics_filepaths.append(lyrics_md_filepath)
+    song_info.lyrics_filepaths.append(lyrics_md_filepath)
 
     # Render lyrics to slides markdown file
     slides_md_filepath = render_lyrics_to_markdown_slides_file(
@@ -386,12 +394,17 @@ def process_song(song_name: str, config: Config) -> SongFiles:
         config.output_folder,
         num_lines_per_slide,
     )
-    song_files.slides_filepaths.append(slides_md_filepath)
+    song_info.slides_filepaths.append(slides_md_filepath)
+
+    # Extract sections for order list 
+    sections = extract_sections_from_chordpro(chordpro_filepath)
+    logging.debug("Extracted sections: %s", sections)
+    song_info.sections = song_name_without_braces + ": " + ", ".join(sections)
 
     # Convert slides markdown to PPTX
     call_pandoc_slides(slides_md_filepath, config.music_folder, config.output_folder)
 
-    return song_files
+    return song_info
 
 
 def main() -> None:  # pragma: no cover
@@ -432,6 +445,16 @@ def main() -> None:  # pragma: no cover
 
         # Combine slides markdown files into final slides file
         combine_slides_files(all_song_files.slides_filepaths, config)
+
+        # Write song section orders to file
+        if all_song_files.sections:
+            sections_filepath = os.path.join(
+                config.output_folder, config.source_file_basename_without_ext + "-sections.txt"
+            )
+            with open(sections_filepath, "w", encoding="utf-8") as f:
+                f.write(all_song_files.sections)
+            logging.debug("Wrote song sections to file: %s", sections_filepath)
+
     except (RuntimeError, ValueError, FileNotFoundError) as e:
         logging.error("Error processing packet: %s", e)
         sys.exit(1)

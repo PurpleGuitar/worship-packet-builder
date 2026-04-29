@@ -14,6 +14,7 @@ from config import Config
 CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
 CHROMATIC_SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 CHROMATIC_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+IGNORE_SECTIONS = ["Intro", "Interlude", "Instrumental", "Turnaround", "Outro"]
 
 
 def transpose_key_by_semitones(original_key: str, semitones: int) -> str:
@@ -229,3 +230,33 @@ def extract_lyrics_from_chordpro(chordpro_filepath: str) -> str:
         raise
     lyrics_text = "\n".join(lyrics_lines)
     return lyrics_text
+
+def extract_sections_from_chordpro(chordpro_filepath: str) -> List[str]:
+    """Extract sections from a ChordPro file and return them as a list of strings."""
+    sections: List[str] = []
+    try:
+        with open(chordpro_filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                # Check for "{comment: SectionName}" directive
+                section_match = re.match(r"\{comment:\s*(.+?)\s*\}", line, re.IGNORECASE)
+                if section_match:
+                    section_name = section_match.group(1)
+                    # Ignore comments after the " - "
+                    section_name = section_name.split(" - ")[0].strip()
+                    # Ignore sections in the ignore list
+                    if section_name in IGNORE_SECTIONS:
+                        continue
+                    # Add section to list
+                    sections.append(section_name)
+                # If line contains "(PLAY x TIMES)" extract the number of repeats
+                play_match = re.search(r"\(PLAY\s+(\d+)\s+TIMES\)", line, re.IGNORECASE)
+                if play_match:
+                    repeats = int(play_match.group(1))
+                    if sections:
+                        last_section = sections[-1]
+                        # Append " (xN)" to the last section name
+                        sections[-1] = f"{last_section} (x{repeats})"
+    except Exception as e:
+        logging.error("Failed to extract sections from %s: %s", chordpro_filepath, e)
+        raise
+    return sections
