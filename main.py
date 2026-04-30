@@ -15,10 +15,9 @@ import yaml
 
 # Project imports
 from chordpro import (
-    extract_lyrics_from_chordpro,
+    ChordProFile,
     render_chordpro_to_pdf,
     render_transposed_chord_pdf,
-    extract_sections_from_chordpro
 )
 from config import Config, load_external_config
 
@@ -176,36 +175,31 @@ def convert_lyrics_to_slides(lyrics_text: str, num_lines_per_slide: int) -> str:
 
 
 def render_lyrics_to_markdown_text_file(
-    song_filename: str, chordpro_filename: str, music_folder: str, output_folder: str
+    song_filename: str, chordpro_file: ChordProFile, output_folder: str
 ) -> str:
     """
     Render lyrics from a ChordPro file to a Markdown file.
     """
-    chordpro_filepath = os.path.join(music_folder, chordpro_filename)
-    lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
     lyrics_md_filepath = os.path.join(
         output_folder,
         os.path.splitext(song_filename)[0] + "-lyrics.md",
     )
     with open(lyrics_md_filepath, "w", encoding="utf-8") as f:
-        f.write(lyrics_text)
+        f.write(chordpro_file.lyrics)
     logging.debug("Wrote lyrics to Markdown text file: %s", lyrics_md_filepath)
     return lyrics_md_filepath
 
 
 def render_lyrics_to_markdown_slides_file(
     song_filename: str,
-    chordpro_filename: str,
-    music_folder: str,
+    chordpro_file: ChordProFile,
     output_folder: str,
     num_lines_per_slide: int,
 ) -> str:
     """
     Render lyrics from a ChordPro file to a Markdown slides file.
     """
-    chordpro_filepath = os.path.join(music_folder, chordpro_filename)
-    lyrics_text = extract_lyrics_from_chordpro(chordpro_filepath)
-    slides_markdown = convert_lyrics_to_slides(lyrics_text, num_lines_per_slide)
+    slides_markdown = convert_lyrics_to_slides(chordpro_file.lyrics, num_lines_per_slide)
     slides_md_filepath = os.path.join(
         output_folder,
         os.path.splitext(song_filename)[0] + "-slides.md",
@@ -361,10 +355,10 @@ def process_song(song_name: str, config: Config) -> SongInfo:
             "num_lines_per_slide not found, defaulting to %d", num_lines_per_slide
         )
 
-    # Get chordpro filepath
+    # Load and parse the ChordPro file once.
     if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
         raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
-    chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
+    chordpro_file = ChordProFile(folder=config.music_folder, filename=chordpro_filename)
 
     # Render ChordPro to PDF
     song_info.chords_pdf_filepaths.append(
@@ -382,24 +376,22 @@ def process_song(song_name: str, config: Config) -> SongInfo:
 
     # Render lyrics to markdown text file
     lyrics_md_filepath = render_lyrics_to_markdown_text_file(
-        song_filename, chordpro_filename, config.music_folder, config.output_folder
+        song_filename, chordpro_file, config.output_folder
     )
     song_info.lyrics_filepaths.append(lyrics_md_filepath)
 
     # Render lyrics to slides markdown file
     slides_md_filepath = render_lyrics_to_markdown_slides_file(
         song_filename,
-        chordpro_filename,
-        config.music_folder,
+        chordpro_file,
         config.output_folder,
         num_lines_per_slide,
     )
     song_info.slides_filepaths.append(slides_md_filepath)
 
-    # Extract sections for order list 
-    sections = extract_sections_from_chordpro(chordpro_filepath)
-    logging.debug("Extracted sections: %s", sections)
-    song_info.sections = song_name_without_braces + ": " + ", ".join(sections)
+    # Build section order list
+    logging.debug("Extracted sections: %s", chordpro_file.sections)
+    song_info.sections = song_name_without_braces + ": " + ", ".join(chordpro_file.sections)
 
     # Convert slides markdown to PPTX
     call_pandoc_slides(slides_md_filepath, config.music_folder, config.output_folder)
