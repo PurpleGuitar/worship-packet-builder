@@ -358,9 +358,10 @@ def process_song(song_name: str, config: Config) -> SongInfo:
         )
 
     # Load and parse the ChordPro file once.
-    if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
+    chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
+    if not os.path.isfile(chordpro_filepath):
         raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
-    chordpro_file = ChordProFile(folder=config.music_folder, filename=chordpro_filename)
+    chordpro_file = ChordProFile(chordpro_filepath)
     logging.debug(chordpro_file)
 
     # Render ChordPro to PDF

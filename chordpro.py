@@ -20,22 +20,17 @@ IGNORE_SECTIONS = ["Intro", "Interlude", "Instrumental", "Turnaround", "Outro"]
 class ChordProFile:
     """A .chordpro file with its raw text and extracted metadata."""
 
-    def __init__(self, folder: str, filename: str) -> None:
-        self.folder = folder
-        self.filename = filename
+    def __init__(self, path: str) -> None:
+        self.path = path
         try:
-            with open(self.filepath, "r", encoding="utf-8") as f:
+            with open(self.path, "r", encoding="utf-8") as f:
                 self.text = f.read()
         except Exception as e:
-            logging.error("Failed to read ChordPro file %s: %s", self.filepath, e)
+            logging.error("Failed to read ChordPro file %s: %s", self.path, e)
             raise
         self.title = self._extract_title()
         self.lyrics = self._extract_lyrics()
         self.sections = self._extract_sections()
-
-    @property
-    def filepath(self) -> str:
-        return os.path.join(self.folder, self.filename)
 
     def _extract_title(self) -> str:
         """Extract the title from a `{title: ...}` directive, or empty if absent."""
