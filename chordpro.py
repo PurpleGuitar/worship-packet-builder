@@ -1,7 +1,6 @@
 """ChordPro rendering and parsing: PDF generation, transposition, lyric extraction."""
 
 # Standard imports
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 import logging
 import os
@@ -16,6 +15,91 @@ CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
 CHROMATIC_SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 CHROMATIC_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 IGNORE_SECTIONS = ["Intro", "Interlude", "Instrumental", "Turnaround", "Outro"]
+
+
+class ChordProFile:
+    """A .chordpro file with its raw text and extracted metadata."""
+
+    def __init__(self, folder: str, filename: str) -> None:
+        self.folder = folder
+        self.filename = filename
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                self.text = f.read()
+        except Exception as e:
+            logging.error("Failed to read ChordPro file %s: %s", self.filepath, e)
+            raise
+        self.title = self._extract_title()
+        self.lyrics = self._extract_lyrics()
+        self.sections = self._extract_sections()
+
+    @property
+    def filepath(self) -> str:
+        return os.path.join(self.folder, self.filename)
+
+    def _extract_title(self) -> str:
+        """Extract the title from a `{title: ...}` directive, or empty if absent."""
+        for line in self.text.splitlines():
+            if line.startswith("{title:"):
+                return line[len("{title:") :].strip().rstrip("}")
+        return ""
+
+    def _extract_lyrics(self) -> str:
+        """Extract lyrics, removing chord annotations."""
+        lyrics_lines: List[str] = []
+        last_line = ""
+        for line in self.text.splitlines():
+            # Special: if it's a title directive, write header and continue
+            if line.startswith("{title:"):
+                title = line[len("{title:") :].strip().rstrip("}")
+                lyrics_lines.append(f"# {title}")
+                lyrics_lines.append("")  # Blank line after title
+                last_line = ""
+                continue
+            # Ignore comment lines starting with #
+            if line.startswith("#"):
+                continue
+            # Replace instrumentals with (Instrumental)
+            if re.match(r".*comment.*instrumental.*", line, re.IGNORECASE):
+                line = "(Instrumental)"
+            # Strip directives enclosed in {}
+            line = re.sub(r"\{.*?\}", "", line)
+            # Remove chord annotations enclosed in []
+            line = re.sub(r"\[.*?\]", "", line)
+            # Collapse multiple spaces into a single space
+            line = re.sub(r"\s+", " ", line)
+            # Remove hyphenations " - "
+            line = line.replace(" - ", "")
+            # Strip leading/trailing whitespace
+            line = line.strip()
+            # If this line is blank and the last line was blank, skip it
+            if not line and not last_line:
+                continue
+            last_line = line
+            lyrics_lines.append(line)
+        return "\n".join(lyrics_lines)
+
+    def _extract_sections(self) -> List[str]:
+        """Extract section names."""
+        sections: List[str] = []
+        for line in self.text.splitlines():
+            # Check for "{comment: SectionName}" directive
+            section_match = re.match(r"\{comment:\s*(.+?)\s*\}", line, re.IGNORECASE)
+            if section_match:
+                section_name = section_match.group(1)
+                # Ignore comments after the " - "
+                section_name = section_name.split(" - ")[0].strip()
+                # Ignore sections in the ignore list
+                if section_name in IGNORE_SECTIONS:
+                    continue
+                sections.append(section_name)
+            # If line contains "(PLAY x TIMES)" extract the number of repeats
+            play_match = re.search(r"\(PLAY\s+(\d+)\s+TIMES\)", line, re.IGNORECASE)
+            if play_match:
+                repeats = int(play_match.group(1))
+                if sections:
+                    sections[-1] = f"{sections[-1]} (x{repeats})"
+        return sections
 
 
 def transpose_key_by_semitones(original_key: str, semitones: int) -> str:
@@ -188,98 +272,3 @@ def render_transposed_chord_pdf(
         transpose,
         transpose_key,
     )
-
-
-def extract_title_from_chordpro(text: str) -> str:
-    """Extract the title from a `{title: ...}` directive, or empty if absent."""
-    for line in text.splitlines():
-        if line.startswith("{title:"):
-            return line[len("{title:") :].strip().rstrip("}")
-    return ""
-
-
-def extract_lyrics_from_chordpro(text: str) -> str:
-    """Extract lyrics from ChordPro text, removing chord annotations."""
-    lyrics_lines: List[str] = []
-    last_line = ""
-    for line in text.splitlines():
-        # Special: if it's a title directive, write header and continue
-        if line.startswith("{title:"):
-            title = line[len("{title:") :].strip().rstrip("}")
-            title_line = f"# {title}"
-            lyrics_lines.append(title_line)
-            lyrics_lines.append("")  # Blank line after title
-            last_line = ""
-            continue
-        # Ignore comment lines starting with #
-        if line.startswith("#"):
-            continue
-        # Replace instrumentals with (Instrumental)
-        if re.match(r".*comment.*instrumental.*", line, re.IGNORECASE):
-            line = "(Instrumental)"
-        # Strip directives enclosed in {}
-        line = re.sub(r"\{.*?\}", "", line)
-        # Remove chord annotations enclosed in []
-        line = re.sub(r"\[.*?\]", "", line)
-        # Collapse multiple spaces into a single space
-        line = re.sub(r"\s+", " ", line)
-        # Remove hyphenations " - "
-        line = line.replace(" - ", "")
-        # Strip leading/trailing whitespace
-        line = line.strip()
-        # If this line is blank and the last line was blank, skip it
-        if not line and not last_line:
-            continue
-        last_line = line
-        lyrics_lines.append(line)
-    return "\n".join(lyrics_lines)
-
-
-def extract_sections_from_chordpro(text: str) -> List[str]:
-    """Extract section names from ChordPro text."""
-    sections: List[str] = []
-    for line in text.splitlines():
-        # Check for "{comment: SectionName}" directive
-        section_match = re.match(r"\{comment:\s*(.+?)\s*\}", line, re.IGNORECASE)
-        if section_match:
-            section_name = section_match.group(1)
-            # Ignore comments after the " - "
-            section_name = section_name.split(" - ")[0].strip()
-            # Ignore sections in the ignore list
-            if section_name in IGNORE_SECTIONS:
-                continue
-            sections.append(section_name)
-        # If line contains "(PLAY x TIMES)" extract the number of repeats
-        play_match = re.search(r"\(PLAY\s+(\d+)\s+TIMES\)", line, re.IGNORECASE)
-        if play_match:
-            repeats = int(play_match.group(1))
-            if sections:
-                sections[-1] = f"{sections[-1]} (x{repeats})"
-    return sections
-
-
-@dataclass
-class ChordProFile:
-    """A .chordpro file with its raw text and extracted metadata."""
-
-    folder: str
-    filename: str
-    text: str = field(init=False)
-    title: str = field(init=False)
-    lyrics: str = field(init=False)
-    sections: List[str] = field(init=False)
-
-    def __post_init__(self) -> None:
-        try:
-            with open(self.filepath, "r", encoding="utf-8") as f:
-                self.text = f.read()
-        except Exception as e:
-            logging.error("Failed to read ChordPro file %s: %s", self.filepath, e)
-            raise
-        self.title = extract_title_from_chordpro(self.text)
-        self.lyrics = extract_lyrics_from_chordpro(self.text)
-        self.sections = extract_sections_from_chordpro(self.text)
-
-    @property
-    def filepath(self) -> str:
-        return os.path.join(self.folder, self.filename)

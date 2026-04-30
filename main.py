@@ -199,7 +199,9 @@ def render_lyrics_to_markdown_slides_file(
     """
     Render lyrics from a ChordPro file to a Markdown slides file.
     """
-    slides_markdown = convert_lyrics_to_slides(chordpro_file.lyrics, num_lines_per_slide)
+    slides_markdown = convert_lyrics_to_slides(
+        chordpro_file.lyrics, num_lines_per_slide
+    )
     slides_md_filepath = os.path.join(
         output_folder,
         os.path.splitext(song_filename)[0] + "-slides.md",
@@ -359,6 +361,7 @@ def process_song(song_name: str, config: Config) -> SongInfo:
     if not os.path.isfile(os.path.join(config.music_folder, chordpro_filename)):
         raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
     chordpro_file = ChordProFile(folder=config.music_folder, filename=chordpro_filename)
+    logging.debug(chordpro_file)
 
     # Render ChordPro to PDF
     song_info.chords_pdf_filepaths.append(
@@ -391,7 +394,9 @@ def process_song(song_name: str, config: Config) -> SongInfo:
 
     # Build section order list
     logging.debug("Extracted sections: %s", chordpro_file.sections)
-    song_info.sections = song_name_without_braces + ": " + ", ".join(chordpro_file.sections)
+    song_info.sections = (
+        song_name_without_braces + ": " + ", ".join(chordpro_file.sections)
+    )
 
     # Convert slides markdown to PPTX
     call_pandoc_slides(slides_md_filepath, config.music_folder, config.output_folder)
@@ -441,7 +446,8 @@ def main() -> None:  # pragma: no cover
         # Write song section orders to file
         if all_song_files.sections:
             sections_filepath = os.path.join(
-                config.output_folder, config.source_file_basename_without_ext + "-sections.txt"
+                config.output_folder,
+                config.source_file_basename_without_ext + "-sections.txt",
             )
             with open(sections_filepath, "w", encoding="utf-8") as f:
                 f.write(all_song_files.sections)
