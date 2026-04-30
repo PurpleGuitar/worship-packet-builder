@@ -275,6 +275,19 @@ def combine_lyrics_files(lyrics_filepaths: List[str], config: Config) -> None:
                 f.write("\n\n")
 
 
+def write_sections_file(sections: str, config: Config) -> None:
+    """Write the combined song section order list to a file."""
+    if not sections:
+        return
+    sections_filepath = os.path.join(
+        config.output_folder,
+        config.source_file_basename_without_ext + "-sections.txt",
+    )
+    with open(sections_filepath, "w", encoding="utf-8") as f:
+        f.write(sections)
+    logging.debug("Wrote song sections to file: %s", sections_filepath)
+
+
 def combine_slides_files(slides_filepaths: List[str], config: Config) -> None:
     """Combine individual slides markdown files and render final slides."""
     final_slides_md_filepath = os.path.join(
@@ -445,14 +458,7 @@ def main() -> None:  # pragma: no cover
         combine_slides_files(all_song_files.slides_filepaths, config)
 
         # Write song section orders to file
-        if all_song_files.sections:
-            sections_filepath = os.path.join(
-                config.output_folder,
-                config.source_file_basename_without_ext + "-sections.txt",
-            )
-            with open(sections_filepath, "w", encoding="utf-8") as f:
-                f.write(all_song_files.sections)
-            logging.debug("Wrote song sections to file: %s", sections_filepath)
+        write_sections_file(all_song_files.sections, config)
 
     except (RuntimeError, ValueError, FileNotFoundError) as e:
         logging.error("Error processing packet: %s", e)
