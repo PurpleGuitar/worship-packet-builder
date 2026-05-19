@@ -29,11 +29,11 @@ class ChordProFile:
         except Exception as e:
             logging.error("Failed to read ChordPro file %s: %s", self.path, e)
             raise
+        if CCLI_LICENSE_PLACEHOLDER not in self.text:
+            raise ValueError(f"ChordPro file {self.path} is missing CCLI license number placeholder: '{CCLI_LICENSE_PLACEHOLDER}'")
         self.title = self._extract_title()
         self.lyrics = self._extract_lyrics()
         self.sections = self._extract_sections()
-        if CCLI_LICENSE_PLACEHOLDER not in self.text:
-            raise ValueError(f"ChordPro file {self.path} is missing CCLI license number placeholder: '{CCLI_LICENSE_PLACEHOLDER}'")
 
     def _extract_title(self) -> str:
         """Extract the title from a `{title: ...}` directive, or empty if absent."""
@@ -271,6 +271,7 @@ def render_transposed_chord_pdf(
         chordpro_filename,
         config.music_folder,
         config.output_folder,
+        config.ccli_license_number,
         transpose,
         transpose_key,
     )
