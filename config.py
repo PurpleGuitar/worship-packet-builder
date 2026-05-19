@@ -14,6 +14,7 @@ class Config:
     source_file_basename_without_ext: str
     music_folder: str
     output_folder: str
+    ccli_license_number: str
 
 
 def load_external_config() -> Config:
@@ -36,12 +37,18 @@ def load_external_config() -> Config:
     if not output_folder:
         raise ValueError("WORSHIP_PACKET_OUTPUT_FOLDER environment variable not set")
 
+    # Church CCLI license number
+    ccli_license_number = os.getenv("WORSHIP_PACKET_CCLI_LICENSE_NUMBER")
+    if not ccli_license_number:
+        raise ValueError("WORSHIP_PACKET_CCLI_LICENSE_NUMBER environment variable not set")
+
     config = Config(
         source_file=source_file,
         source_file_basename=source_file_basename,
         source_file_basename_without_ext=source_file_basename_without_ext,
         music_folder=music_folder,
         output_folder=output_folder,
+        ccli_license_number=ccli_license_number,
     )
     logging.debug("Loaded external config: %s", config)
     return config

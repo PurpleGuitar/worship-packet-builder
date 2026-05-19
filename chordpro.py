@@ -15,6 +15,7 @@ CHORDPRO_CONFIG_DEFAULT_FILENAME = "chordpro-config-default.json"
 CHROMATIC_SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 CHROMATIC_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 IGNORE_SECTIONS = ["Intro", "Interlude", "Instrumental", "Turnaround", "Outro"]
+CCLI_LICENSE_PLACEHOLDER = "CCLI License # %{ccli_license}"
 
 
 class ChordProFile:
@@ -31,6 +32,8 @@ class ChordProFile:
         self.title = self._extract_title()
         self.lyrics = self._extract_lyrics()
         self.sections = self._extract_sections()
+        if CCLI_LICENSE_PLACEHOLDER not in self.text:
+            raise ValueError(f"ChordPro file {self.path} is missing CCLI license number placeholder: '{CCLI_LICENSE_PLACEHOLDER}'")
 
     def _extract_title(self) -> str:
         """Extract the title from a `{title: ...}` directive, or empty if absent."""
@@ -118,6 +121,7 @@ def call_chordpro(
     custom_config_filepath: str,
     pdf_filepath: str,
     chordpro_filepath: str,
+    ccli_license_number: str,
     transpose: int = 0,
 ) -> None:
     """Invoke chordpro with the given parameters"""
@@ -135,6 +139,7 @@ def call_chordpro(
             "letter",
             "--transpose",
             str(transpose),
+            "--meta=ccli_license=" + ccli_license_number,
             "--output",
             pdf_filepath,
             chordpro_filepath,
@@ -157,6 +162,7 @@ def render_chordpro_to_pdf(
     chordpro_filename: str,
     music_folder: str,
     output_folder: str,
+    ccli_license_number: str,
     transpose: int = 0,
     transpose_key: str = "",
 ) -> str:
@@ -207,6 +213,7 @@ def render_chordpro_to_pdf(
         config_filepath,
         pdf_filepath,
         chordpro_filepath,
+        ccli_license_number,
         transpose,
     )
 
