@@ -374,8 +374,7 @@ def process_song(song_name: str, config: Config) -> SongInfo:
     chordpro_filepath = os.path.join(config.music_folder, chordpro_filename)
     if not os.path.isfile(chordpro_filepath):
         raise FileNotFoundError(f"Chordpro file does not exist: {chordpro_filename}")
-    chordpro_file = ChordProFile(chordpro_filepath)
-    logging.debug(chordpro_file)
+    chordpro_file = ChordProFile(chordpro_filepath, config.ccli_license_number)
 
     # Render ChordPro to PDF
     song_info.chords_pdf_filepaths.append(

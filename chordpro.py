@@ -21,8 +21,9 @@ CCLI_LICENSE_PLACEHOLDER = "CCLI License # %{ccli_license}"
 class ChordProFile:
     """A .chordpro file with its raw text and extracted metadata."""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, ccli_license_number: str) -> None:
         self.path = path
+        self.ccli_license_number = ccli_license_number
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 self.text = f.read()
@@ -57,6 +58,9 @@ class ChordProFile:
             # Ignore comment lines starting with #
             if line.startswith("#"):
                 continue
+            # Substitute the CCLI license metadata before directives are stripped,
+            # mirroring chordpro's `--meta=ccli_license=...` substitution for the PDF.
+            line = line.replace("%{ccli_license}", self.ccli_license_number)
             # Replace instrumentals with (Instrumental)
             if re.match(r".*comment.*instrumental.*", line, re.IGNORECASE):
                 line = "(Instrumental)"
