@@ -40,7 +40,9 @@ def load_external_config() -> Config:
     # Church CCLI license number
     ccli_license_number = os.getenv("WORSHIP_PACKET_CCLI_LICENSE_NUMBER")
     if not ccli_license_number:
-        raise ValueError("WORSHIP_PACKET_CCLI_LICENSE_NUMBER environment variable not set")
+        raise ValueError(
+            "WORSHIP_PACKET_CCLI_LICENSE_NUMBER environment variable not set"
+        )
 
     config = Config(
         source_file=source_file,

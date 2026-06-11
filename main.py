@@ -379,7 +379,10 @@ def process_song(song_name: str, config: Config) -> SongInfo:
     # Render ChordPro to PDF
     song_info.chords_pdf_filepaths.append(
         render_chordpro_to_pdf(
-            chordpro_filename, config.music_folder, config.output_folder, config.ccli_license_number
+            chordpro_filename,
+            config.music_folder,
+            config.output_folder,
+            config.ccli_license_number,
         )
     )
 

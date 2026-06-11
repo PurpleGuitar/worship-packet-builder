@@ -1,23 +1,24 @@
 # Worship Packet Builder
 
-A command-line tool that builds a complete worship team packet from a set
-of [ChordPro](https://www.chordpro.org/) song files. Given a setlist, it
-produces:
+A command-line tool that builds a complete worship team packet from a
+set of [ChordPro](https://www.chordpro.org/) song files. Given a
+setlist, it produces:
 
-- **Chord charts** — each song rendered to PDF by `chordpro`, with an
+- **Chord charts** --- each song rendered to PDF by `chordpro`, with an
   optional transposed version, all combined into a single
   `...-worship-music.pdf`.
-- **Lyrics sheets** — chords and directives stripped out, written to
+- **Lyrics sheets** --- chords and directives stripped out, written to
   Markdown (one combined `...-lyrics.md`).
-- **Presentation slides** — lyrics broken into slides and rendered to
-  PowerPoint (`.pptx`) via `pandoc`, both per-song and as one combined deck.
-- **Section order** — the arrangement (Verse, Chorus, etc.) for each song,
-  written to `...-sections.txt`.
+- **Presentation slides** --- lyrics broken into slides and rendered to
+  PowerPoint (`.pptx`) via `pandoc`, both per-song and as one combined
+  deck.
+- **Section order** --- the arrangement (Verse, Chorus, etc.) for each
+  song, written to `...-sections.txt`.
 
 # How it works
 
-You provide a **source file**: a Markdown file whose YAML frontmatter lists
-the songs in the set, using Obsidian-style `[[wikilinks]]`:
+You provide a **source file**: a Markdown file whose YAML frontmatter
+lists the songs in the set, using Obsidian-style `[[wikilinks]]`:
 
 ``` yaml
 ---
@@ -40,46 +41,51 @@ transpose: 2             # optional: semitones to transpose
 
 For each song the builder:
 
-1. Renders the ChordPro file to a chord-chart PDF (using
-   `chordpro-config-default.json` plus an optional per-song config file).
-2. If `transpose` is set, renders a second, transposed PDF. The new key is
-   calculated from the original key encoded in the filename suffix (e.g.
-   `-G`, `-Bb`).
-3. Extracts the lyrics — stripping chords, directives, and comments — to a
-   Markdown file.
-4. Converts those lyrics into slides (splitting on blank lines, section
-   length, and `(PLAY n TIMES)` repeat directives) and renders them to
-   `.pptx` using `pandoc` with `template.pptx` as the reference document.
-5. Records the song's section order.
+1.  Renders the ChordPro file to a chord-chart PDF (using
+    `chordpro-config-default.json` plus an optional per-song config
+    file).
+2.  If `transpose` is set, renders a second, transposed PDF. The new key
+    is calculated from the original key encoded in the filename suffix
+    (e.g. `-G`, `-Bb`).
+3.  Extracts the lyrics --- stripping chords, directives, and comments
+    --- to a Markdown file.
+4.  Converts those lyrics into slides (splitting on blank lines, section
+    length, and `(PLAY n TIMES)` repeat directives) and renders them to
+    `.pptx` using `pandoc` with `template.pptx` as the reference
+    document.
+5.  Records the song's section order.
 
-Finally it merges the per-song PDFs (`pdfunite`), lyrics, and slides into
-combined packet files in the output folder.
+Finally it merges the per-song PDFs (`pdfunite`), lyrics, and slides
+into combined packet files in the output folder.
 
 # Requirements
 
 External command-line tools must be installed and on your `PATH`:
 
-- [`chordpro`](https://www.chordpro.org/) — renders chord charts to PDF.
-- [`pandoc`](https://pandoc.org/) — converts lyric Markdown to `.pptx`.
-- `pdfunite` (from [Poppler](https://poppler.freedesktop.org/)) — merges
-  the chord PDFs.
+- [`chordpro`](https://www.chordpro.org/) --- renders chord charts to
+  PDF.
+- [`pandoc`](https://pandoc.org/) --- converts lyric Markdown to
+  `.pptx`.
+- `pdfunite` (from [Poppler](https://poppler.freedesktop.org/)) ---
+  merges the chord PDFs.
 
-Python dependencies (`PyYAML`, plus dev tooling) are managed automatically
-via `venv` — see below.
+Python dependencies (`PyYAML`, plus dev tooling) are managed
+automatically via `venv` --- see below.
 
 # Configuration
 
 The tool is configured entirely through environment variables:
 
-| Variable | Description |
-| --- | --- |
-| `WORSHIP_PACKET_SOURCE_FILE` | Path to the setlist Markdown file. |
-| `WORSHIP_PACKET_MUSIC_FOLDER` | Folder containing song files, ChordPro files, configs, and `template.pptx`. |
-| `WORSHIP_PACKET_OUTPUT_FOLDER` | Folder where generated PDFs, Markdown, and slides are written. |
+| Variable                             | Description                                                                  |
+|--------------------------------------|------------------------------------------------------------------------------|
+| `WORSHIP_PACKET_SOURCE_FILE`         | Path to the setlist Markdown file.                                           |
+| `WORSHIP_PACKET_MUSIC_FOLDER`        | Folder containing song files, ChordPro files, configs, and `template.pptx`.  |
+| `WORSHIP_PACKET_OUTPUT_FOLDER`       | Folder where generated PDFs, Markdown, and slides are written.               |
 | `WORSHIP_PACKET_CCLI_LICENSE_NUMBER` | Your church's CCLI license number, substituted into chord charts and lyrics. |
 
-ChordPro files must contain the placeholder `CCLI License # %{ccli_license}`,
-which is replaced with the configured license number.
+ChordPro files must contain the placeholder
+`CCLI License # %{ccli_license}`, which is replaced with the configured
+license number.
 
 # Running
 
@@ -101,8 +107,8 @@ python3 main.py [--trace]
 
 - `main.py`: CLI entry point; reads the setlist, drives processing, and
   combines the output files.
-- `chordpro.py`: ChordPro parsing — title/lyrics/section extraction, key
-  transposition, and PDF rendering via the `chordpro` tool.
+- `chordpro.py`: ChordPro parsing --- title/lyrics/section extraction,
+  key transposition, and PDF rendering via the `chordpro` tool.
 - `config.py`: loads runtime configuration from environment variables.
 - `tests/test_main.py`: unit tests.
 - `requirements.txt`: Python library and dev-tool dependencies.
@@ -110,27 +116,28 @@ python3 main.py [--trace]
 
 # Development
 
-This project uses a `venv` virtual environment that is created and updated
-automatically by the `make` commands. The standard tooling:
+This project uses a `venv` virtual environment that is created and
+updated automatically by the `make` commands. The standard tooling:
 
 - `make run` to run with debug logs sent to stderr.
 - `make lint` to run `mypy` (strict) and `pylint` on source and tests.
 - `make test` to discover and run tests with `coverage`.
-- `make format` to reformat Python source files (`black`) and `readme.md`
-  (`pandoc`).
-- `make dist` to build a standalone executable in `dist/` via `pyinstaller`.
+- `make format` to reformat Python source files (`black`) and
+  `readme.md` (`pandoc`).
+- `make dist` to build a standalone executable in `dist/` via
+  `pyinstaller`.
 - `make clean` to clean up temporary files and the virtual environment.
 
-Tests live in `tests/` and are auto-discovered; test files should be named
-`test_*.py`.
+Tests live in `tests/` and are auto-discovered; test files should be
+named `test_*.py`.
 
 ## Virtual environment
 
-Virtual environment management is automatic. Update `requirements.txt` to
-add or remove libraries, and the `make` commands will call `venv` and `pip`
-as needed. To force an update, `touch requirements.txt` and run any `make`
-command. To rebuild from scratch, `make clean` then re-run any `make`
-command.
+Virtual environment management is automatic. Update `requirements.txt`
+to add or remove libraries, and the `make` commands will call `venv` and
+`pip` as needed. To force an update, `touch requirements.txt` and run
+any `make` command. To rebuild from scratch, `make clean` then re-run
+any `make` command.
 
 # VS Code
 
@@ -140,8 +147,8 @@ VS Code is configured to:
 - Discover, run, and debug unit tests in the "Testing" view.
 - Use `make .venv` to create or update the virtual environment.
 
-If VS Code doesn't pick up your modules, use "Python: Select Interpreter"
-and choose `./.venv/bin/python`.
+If VS Code doesn't pick up your modules, use "Python: Select
+Interpreter" and choose `./.venv/bin/python`.
 
 # Docker support
 
