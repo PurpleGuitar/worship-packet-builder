@@ -1,7 +1,7 @@
-black==24.8.0
-coverage==7.6.1
-mypy==1.11.1
-pylint==3.2.6
-pyinstaller==6.10.0
-PyYAML
-types_PyYAML
+black==26.5.1
+coverage==7.15.0
+mypy==2.2.0
+pylint==4.0.6
+pyinstaller==6.21.0
+PyYAML==6.0.3
+types-PyYAML==6.0.12.20260518
