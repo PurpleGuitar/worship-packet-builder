@@ -2,12 +2,10 @@
 
 # Standard imports
 import unittest
-from unittest.mock import patch
 
 # Library imports
 
 # Project imports
-from config import Config
 import main
 
 
