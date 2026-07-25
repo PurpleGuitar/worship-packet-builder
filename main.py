@@ -27,6 +27,8 @@ class SongInfo:
     """Aggregated output file paths produced by processing one or more songs."""
 
     chords_pdf_filepaths: List[str] = field(default_factory=list)
+    non_capo_chords_pdf_filepaths: List[str] = field(default_factory=list)
+    guitarist_chords_pdf_filepaths: List[str] = field(default_factory=list)
     lyrics_filepaths: List[str] = field(default_factory=list)
     slides_filepaths: List[str] = field(default_factory=list)
     sections: str = ""
@@ -313,6 +315,12 @@ def process_songs(songs: List[str], config: Config) -> SongInfo:
     for song_name in songs:
         song_info = process_song(song_name, config)
         song_infos.chords_pdf_filepaths.extend(song_info.chords_pdf_filepaths)
+        song_infos.non_capo_chords_pdf_filepaths.extend(
+            song_info.non_capo_chords_pdf_filepaths
+        )
+        song_infos.guitarist_chords_pdf_filepaths.extend(
+            song_info.guitarist_chords_pdf_filepaths
+        )
         song_infos.lyrics_filepaths.extend(song_info.lyrics_filepaths)
         song_infos.slides_filepaths.extend(song_info.slides_filepaths)
         if song_info.sections:
@@ -377,14 +385,14 @@ def process_song(song_name: str, config: Config) -> SongInfo:
     chordpro_file = ChordProFile(chordpro_filepath, config.ccli_license_number)
 
     # Render ChordPro to PDF
-    song_info.chords_pdf_filepaths.append(
-        render_chordpro_to_pdf(
-            chordpro_filename,
-            config.music_folder,
-            config.output_folder,
-            config.ccli_license_number,
-        )
+    base_pdf_filepath = render_chordpro_to_pdf(
+        chordpro_filename,
+        config.music_folder,
+        config.output_folder,
+        config.ccli_license_number,
     )
+    song_info.chords_pdf_filepaths.append(base_pdf_filepath)
+    song_info.non_capo_chords_pdf_filepaths.append(base_pdf_filepath)
 
     # If transpose is specified in frontmatter, re-render with transposition.
     transposed_pdf_filepath = render_transposed_chord_pdf(
@@ -392,6 +400,9 @@ def process_song(song_name: str, config: Config) -> SongInfo:
     )
     if transposed_pdf_filepath:
         song_info.chords_pdf_filepaths.append(transposed_pdf_filepath)
+        song_info.guitarist_chords_pdf_filepaths.append(transposed_pdf_filepath)
+    else:
+        song_info.guitarist_chords_pdf_filepaths.append(base_pdf_filepath)
 
     # Render lyrics to markdown text file
     lyrics_md_filepath = render_lyrics_to_markdown_text_file(
@@ -452,6 +463,22 @@ def main() -> None:  # pragma: no cover
             config.source_file_basename_without_ext,
             config.output_folder,
         )
+
+        # Build non-capo packet (base/non-transposed chart per song).
+        if all_song_files.non_capo_chords_pdf_filepaths:
+            call_pdfunite(
+                all_song_files.non_capo_chords_pdf_filepaths,
+                config.source_file_basename_without_ext + "-non-capo",
+                config.output_folder,
+            )
+
+        # Build guitarist packet (transposed when available, else base chart).
+        if all_song_files.guitarist_chords_pdf_filepaths:
+            call_pdfunite(
+                all_song_files.guitarist_chords_pdf_filepaths,
+                config.source_file_basename_without_ext + "-guitar",
+                config.output_folder,
+            )
 
         # Combine lyrics markdown files into final lyrics file
         combine_lyrics_files(all_song_files.lyrics_filepaths, config)
