@@ -122,6 +122,23 @@ def transpose_key_by_semitones(original_key: str, semitones: int) -> str:
     return output_scale[(original_idx + semitones) % 12]
 
 
+def extract_key_from_chordpro_path(chordpro_filepath: str) -> Optional[str]:
+    """Extract trailing key suffix from a chordpro filename, e.g. song-Bb."""
+    chordpro_basename_without_ext, _ = os.path.splitext(
+        os.path.basename(chordpro_filepath)
+    )
+    key_match = re.search(r"-([A-G][#b]?)$", chordpro_basename_without_ext)
+    if not key_match:
+        return None
+    return key_match.group(1)
+
+
+def capo_for_transpose(transpose: int) -> int:
+    """Return capo fret that preserves pitch for a transposed chart."""
+    normalized_transpose = transpose % 12
+    return (12 - normalized_transpose) % 12
+
+
 def call_chordpro(
     default_config_filepath: str,
     custom_config_filepath: str,
@@ -139,6 +156,12 @@ def call_chordpro(
     ]
     if custom_config_filepath != "":
         chordpro_args.extend(["--config", custom_config_filepath])
+    if transpose != 0:
+        target_key = extract_key_from_chordpro_path(chordpro_filepath)
+        subtitle = f"Guitar: Capo {capo_for_transpose(transpose)}"
+        if target_key:
+            subtitle = f"{subtitle} to {target_key}"
+        chordpro_args.append(f"--meta=subtitle={subtitle}")
     chordpro_args.extend(
         [
             "--page-size",
